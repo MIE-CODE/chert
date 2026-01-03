@@ -41,48 +41,56 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredContacts = mockContacts.filter((contact) =>
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // Ensure arrays are safe
+  const safeSearchQuery = searchQuery || "";
+  const safeMockContacts = Array.isArray(mockContacts) ? mockContacts : [];
+  
+  const filteredContacts = safeMockContacts.filter((contact) =>
+    contact?.name?.toLowerCase().includes(safeSearchQuery.toLowerCase())
   );
 
   const toggleMember = (id: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
-    );
+    setSelectedMembers((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      return safePrev.includes(id) 
+        ? safePrev.filter((m) => m !== id) 
+        : [...safePrev, id];
+    });
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background w-full">
+    <div className="flex flex-col h-screen bg-background w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border bg-surface-elevated">
-        <IconButton variant="ghost" size="md" onClick={onBack}>
+      <div className="flex items-center gap-2 md:gap-3 p-3 md:p-4 border-b border-border bg-surface-elevated shrink-0">
+        <IconButton variant="ghost" size="md" onClick={onBack} className="shrink-0">
           <ArrowLeftIcon />
         </IconButton>
-        <h1 className="text-xl font-bold text-primary">New Group</h1>
+        <h1 className="text-lg md:text-xl font-bold text-primary">New Group</h1>
       </div>
 
       {/* Group Info */}
-      <div className="p-4 border-b border-border bg-surface-elevated">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="relative">
+      <div className="p-3 md:p-4 border-b border-border bg-surface-elevated shrink-0">
+        <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-4">
+          <div className="relative shrink-0">
             <Avatar name={groupName || "Group"} size="xl" />
-            <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-inverse flex items-center justify-center hover:bg-primary-hover transition-colors">
-              <PlusIcon className="w-4 h-4" />
+            <button className="absolute bottom-0 right-0 w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary text-inverse flex items-center justify-center hover:bg-primary-hover transition-colors touch-manipulation min-w-[44px] min-h-[44px]">
+              <PlusIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </button>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <Input
               placeholder="Group name"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
+              className="text-base"
             />
           </div>
         </div>
 
-        {selectedMembers.length > 0 && (
+        {Array.isArray(selectedMembers) && selectedMembers.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {selectedMembers.map((id) => {
-              const contact = mockContacts.find((c) => c.id === id);
+              const contact = safeMockContacts.find((c) => c?.id === id);
               return (
                 <Badge
                   key={id}
@@ -90,10 +98,10 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
                   size="sm"
                   className="flex items-center gap-1"
                 >
-                  {contact?.name}
+                  <span className="text-xs md:text-sm">{contact?.name}</span>
                   <button
                     onClick={() => toggleMember(id)}
-                    className="ml-1 hover:opacity-70"
+                    className="ml-1 hover:opacity-70 min-w-[20px] min-h-[20px] flex items-center justify-center"
                   >
                     ×
                   </button>
@@ -105,27 +113,27 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
       </div>
 
       {/* Search */}
-      <div className="p-4 border-b border-border bg-surface-elevated">
+      <div className="p-3 md:p-4 border-b border-border bg-surface-elevated shrink-0">
         <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary w-5 h-5" />
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary w-4 h-4 md:w-5 md:h-5" />
           <input
             type="text"
             placeholder="Search contacts"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-surface text-primary placeholder:text-tertiary focus:outline-none transition-all"
+            className="w-full pl-9 md:pl-10 pr-4 py-2.5 text-sm md:text-base rounded-lg border border-border bg-surface text-primary placeholder:text-tertiary focus:outline-none transition-all"
           />
         </div>
       </div>
 
       {/* Contact List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {filteredContacts.map((contact) => (
           <div
             key={contact.id}
             onClick={() => toggleMember(contact.id)}
             className={cn(
-              "flex items-center gap-3 p-3 cursor-pointer hover:bg-surface transition-colors",
+              "flex items-center gap-2 md:gap-3 p-2.5 md:p-3 cursor-pointer hover:bg-surface active:bg-surface transition-colors touch-manipulation",
               selectedMembers.includes(contact.id) && "bg-primary-light"
             )}
           >
@@ -134,11 +142,11 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
               name={contact.name}
               size="md"
             />
-            <div className="flex-1">
-              <h3 className="font-medium text-primary">{contact.name}</h3>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-primary text-sm md:text-base truncate">{contact.name}</h3>
             </div>
             {selectedMembers.includes(contact.id) && (
-              <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
                 <svg className="w-3 h-3 text-inverse" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
@@ -149,14 +157,14 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
       </div>
 
       {/* Create Button */}
-      <div className="p-4 border-t border-border bg-surface-elevated">
+      <div className="p-3 md:p-4 border-t border-border bg-surface-elevated shrink-0 safe-area-bottom">
         <Button
           variant="primary"
           size="lg"
-          className="w-full"
-          disabled={!groupName || selectedMembers.length < 2}
+          className="w-full min-h-[44px]"
+          disabled={!groupName || !Array.isArray(selectedMembers) || selectedMembers.length < 2}
           onClick={async () => {
-            if (groupName && selectedMembers.length >= 2) {
+            if (groupName && Array.isArray(selectedMembers) && selectedMembers.length >= 2) {
               try {
                 const { chatsAPI } = await import("@/app/services/api");
                 const chat = await chatsAPI.createChat({

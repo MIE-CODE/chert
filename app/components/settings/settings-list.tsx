@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { IconButton } from "@/app/components/ui/icon-button";
 import { ArrowLeftIcon, SettingsIcon } from "@/app/components/ui/icons";
 import { cn } from "@/app/lib/utils";
+import { useUserStore } from "@/app/store";
+import { useToast } from "@/app/components/ui/toast";
 
 interface SettingsItem {
   id: string;
@@ -84,11 +87,38 @@ const settingsSections: { title?: string; items: SettingsItem[] }[] = [
 ];
 
 export function SettingsList() {
+  const router = useRouter();
+  const { logout } = useUserStore();
+  const toast = useToast();
+
+  const handleBack = () => {
+    router.back();
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push("/auth/login");
+    toast.success("Logged out successfully");
+  };
+
+  const handleSettingsItem = (id: string) => {
+    switch (id) {
+      case "profile":
+        router.push("/settings/profile");
+        break;
+      case "logout":
+        handleLogout();
+        break;
+      default:
+        toast.info(`${id.charAt(0).toUpperCase() + id.slice(1)} feature coming soon`);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b border-border bg-surface-elevated">
-        <IconButton variant="ghost" size="md">
+        <IconButton variant="ghost" size="md" onClick={handleBack}>
           <ArrowLeftIcon />
         </IconButton>
         <h1 className="text-xl font-bold text-primary">Settings</h1>
@@ -107,9 +137,9 @@ export function SettingsList() {
               {section.items.map((item, itemIdx) => (
                 <div
                   key={item.id}
-                  onClick={item.onClick}
+                  onClick={() => handleSettingsItem(item.id)}
                   className={cn(
-                    "flex items-center justify-between p-4 cursor-pointer hover:bg-surface transition-colors",
+                    "flex items-center justify-between p-4 cursor-pointer hover:bg-surface transition-colors touch-manipulation",
                     itemIdx < section.items.length - 1 && "border-b border-border"
                   )}
                 >

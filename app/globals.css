@@ -166,6 +166,50 @@ body {
   font-family: var(--font-sans);
   line-height: 1.5;
   overflow-x: hidden;
+  /* Safe area insets for mobile devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+  body {
+    font-size: 16px; /* Prevent zoom on iOS input focus */
+  }
+  
+  /* Better touch targets - minimum 44x44px */
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent text size adjustment on iOS */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Safe area utilities */
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-area-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Touch manipulation for better mobile performance */
+.touch-manipulation {
+  touch-action: manipulation;
 }
 
 /* Scrollbar Styling */

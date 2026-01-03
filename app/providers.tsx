@@ -13,11 +13,11 @@ function WebSocketProvider({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <StoreProvider>
-      <AuthProvider>
-        <ToastProvider>
+      <ToastProvider>
+        <AuthProvider>
           <WebSocketProvider>{children}</WebSocketProvider>
-        </ToastProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ToastProvider>
     </StoreProvider>
   );
 }

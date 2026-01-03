@@ -65,16 +65,41 @@ class ChatsAPI {
   /**
    * Get all user's chats
    */
-  async getChats(): Promise<Chat[]> {
-    const response = await apiClient.axiosInstance.get<
-      ApiResponse<{ chats: Chat[] }>
-    >(this.basePath);
+  async getChats(): Promise<any[]> {
+    try {
+      const response = await apiClient.axiosInstance.get<
+        ApiResponse<{ chats?: any[] } | any[]>
+      >(this.basePath);
 
-    if (response.data.success && response.data.data) {
-      return response.data.data.chats;
+      if (response.data.success && response.data.data) {
+        // Handle both response formats:
+        // 1. { data: { chats: [...] } } - nested format
+        // 2. { data: [...] } - direct array format
+        const data = response.data.data;
+        
+        if (Array.isArray(data)) {
+          // Direct array format
+          return data;
+        } else if (data && typeof data === "object" && "chats" in data) {
+          // Nested format with chats property
+          const chats = (data as { chats?: any[] }).chats;
+          return Array.isArray(chats) ? chats : [];
+        } else {
+          // Fallback: try to extract any array from data
+          console.warn("Unexpected API response format:", data);
+          return [];
+        }
+      }
+
+      throw new Error(response.data.message || "Failed to get chats");
+    } catch (error: any) {
+      // Preserve timeout and network error flags
+      if (error?.isTimeout || error?.isNetworkError) {
+        error.isTimeout = error.isTimeout || error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+        error.isNetworkError = error.isNetworkError || error.code === 'ERR_NETWORK';
+      }
+      throw error;
     }
-
-    throw new Error(response.data.message || "Failed to get chats");
   }
 
   /**

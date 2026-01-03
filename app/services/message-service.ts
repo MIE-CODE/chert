@@ -20,7 +20,7 @@ export class MessageService {
       content: text, // Also set content for API compatibility
       senderId,
       senderName,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(), // Store as ISO string for Redux serialization
       isRead: false,
       isDelivered: false,
     };
@@ -53,19 +53,48 @@ export class MessageService {
     const content = message.content || message.text || "";
     
     // Extract timestamp (handle createdAt, updatedAt, timestamp)
-    let timestamp: Date | string;
+    // Always store as ISO string for Redux serialization
+    let timestamp: string;
     const timestampValue = message.timestamp || message.createdAt || message.updatedAt;
-    if (timestampValue) {
-      timestamp = typeof timestampValue === "string" 
-        ? new Date(timestampValue) 
-        : timestampValue;
-    } else {
-      timestamp = new Date();
+    
+    // Handle various timestamp formats and ensure we always get a valid ISO string
+    try {
+      if (!timestampValue || (typeof timestampValue === "object" && !(timestampValue instanceof Date) && Object.keys(timestampValue).length === 0)) {
+        // Empty object, null, undefined, or falsy value
+        timestamp = new Date().toISOString();
+      } else if (typeof timestampValue === "string") {
+        // Validate it's a valid date string
+        const date = new Date(timestampValue);
+        timestamp = isNaN(date.getTime()) ? new Date().toISOString() : timestampValue;
+      } else if (timestampValue instanceof Date) {
+        timestamp = isNaN(timestampValue.getTime()) ? new Date().toISOString() : timestampValue.toISOString();
+      } else if (typeof timestampValue === "number") {
+        // Handle Unix timestamp
+        const date = new Date(timestampValue);
+        timestamp = isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+      } else if (typeof timestampValue === "object" && timestampValue !== null) {
+        // If it's an object (but not a Date), it's invalid - use current time
+        console.warn("Invalid timestamp format in message (object):", timestampValue);
+        timestamp = new Date().toISOString();
+      } else {
+        // Fallback for any other type
+        timestamp = new Date().toISOString();
+      }
+    } catch (error) {
+      // If anything goes wrong, use current time
+      console.warn("Error parsing timestamp:", error, timestampValue);
+      timestamp = new Date().toISOString();
+    }
+    
+    // Final validation: ensure timestamp is a valid ISO string
+    if (!timestamp || typeof timestamp !== "string" || timestamp.length === 0) {
+      timestamp = new Date().toISOString();
     }
     
     // Extract other fields
     const chatId = message.chatId || "";
-    const isRead = message.isRead !== undefined ? message.isRead : (message.readBy?.length > 0 || false);
+    const safeReadBy = Array.isArray(message.readBy) ? message.readBy : [];
+    const isRead = message.isRead !== undefined ? message.isRead : (safeReadBy.length > 0 || false);
     const isDelivered = message.isDelivered !== undefined ? message.isDelivered : (message.status === "sent" || message.status === "delivered");
     
     return {
@@ -78,9 +107,9 @@ export class MessageService {
       timestamp,
       isRead,
       isDelivered,
-      reactions: message.reactions || [],
+      reactions: Array.isArray(message.reactions) ? message.reactions : [],
       replyTo: message.replyTo || undefined,
-      attachments: message.attachments || undefined,
+      attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
     };
   }
   

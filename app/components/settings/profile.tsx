@@ -1,24 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar } from "@/app/components/ui/avatar";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { IconButton } from "@/app/components/ui/icon-button";
 import { ArrowLeftIcon, PlusIcon } from "@/app/components/ui/icons";
+import { useToast } from "@/app/components/ui/toast";
 
 export function ProfileSettings() {
+  const router = useRouter();
+  const toast = useToast();
   const [name, setName] = useState("John Doe");
   const [username, setUsername] = useState("johndoe");
   const [bio, setBio] = useState("Hey there! I'm using Chert.");
   const [phone, setPhone] = useState("+1 (555) 123-4567");
   const [email, setEmail] = useState("john@example.com");
 
+  const handleBack = () => {
+    router.back();
+  };
+
+  const handleSave = () => {
+    // In a real app, this would save to the API
+    toast.success("Profile updated successfully");
+    router.back();
+  };
+
+  const handleChangePhoto = () => {
+    toast.info("Change photo feature coming soon");
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b border-border bg-surface-elevated">
-        <IconButton variant="ghost" size="md">
+        <IconButton variant="ghost" size="md" onClick={handleBack}>
           <ArrowLeftIcon />
         </IconButton>
         <h1 className="text-xl font-bold text-primary">Edit Profile</h1>
@@ -29,7 +47,11 @@ export function ProfileSettings() {
         <div className="flex flex-col items-center">
           <div className="relative">
             <Avatar name={name} size="xl" />
-            <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-inverse flex items-center justify-center hover:bg-primary-hover transition-colors">
+            <button 
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-inverse flex items-center justify-center hover:bg-primary-hover transition-colors"
+              onClick={handleChangePhoto}
+              title="Change photo"
+            >
               <PlusIcon className="w-4 h-4" />
             </button>
           </div>
@@ -79,7 +101,12 @@ export function ProfileSettings() {
           />
         </div>
 
-        <Button variant="primary" size="lg" className="w-full">
+        <Button 
+          variant="primary" 
+          size="lg" 
+          className="w-full"
+          onClick={handleSave}
+        >
           Save Changes
         </Button>
       </div>

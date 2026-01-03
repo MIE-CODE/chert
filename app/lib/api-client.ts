@@ -17,6 +17,8 @@ class ApiClient {
       headers: {
         "Content-Type": "application/json",
       },
+      timeout: 30000, // 30 seconds timeout
+      timeoutErrorMessage: "Request timeout. Please check your connection and try again.",
     });
 
     this.setupInterceptors();
@@ -45,13 +47,28 @@ class ApiClient {
       }
     );
 
-    // Response interceptor - Handle token refresh
+    // Response interceptor - Handle token refresh and errors
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & {
           _retry?: boolean;
         };
+
+        // Handle timeout errors
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          // Don't break the app, just reject with a user-friendly error
+          const timeoutError = new Error("Request timeout. Please check your connection and try again.");
+          (timeoutError as any).isTimeout = true;
+          return Promise.reject(timeoutError);
+        }
+
+        // Handle network errors
+        if (!error.response && error.request) {
+          const networkError = new Error("Network error. Please check your connection and try again.");
+          (networkError as any).isNetworkError = true;
+          return Promise.reject(networkError);
+        }
 
         // If 401 and not already retrying, try to refresh token
         if (error.response?.status === 401 && !originalRequest._retry) {

@@ -21,10 +21,38 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const loadedChatIdRef = useRef<string | null>(null);
+  const isLoadingRef = useRef(false);
+  
+  // Store function references in refs to avoid dependency issues
+  const getChatMessagesRef = useRef(getChatMessages);
+  const addMessageToStoreRef = useRef(addMessageToStore);
+  
+  // Update refs when functions change
+  useEffect(() => {
+    getChatMessagesRef.current = getChatMessages;
+    addMessageToStoreRef.current = addMessageToStore;
+  }, [getChatMessages, addMessageToStore]);
 
   // Load messages from API and store
   useEffect(() => {
+    // Reset when chatId changes
+    if (loadedChatIdRef.current !== chatId) {
+      loadedChatIdRef.current = null;
+      isLoadingRef.current = false;
+      setLocalMessages([]); // Clear previous chat's messages
+    }
+
+    // Prevent loading if already loading or if this chat is already loaded
+    if (!chatId || isLoadingRef.current || loadedChatIdRef.current === chatId) {
+      return;
+    }
+
     const loadMessages = async () => {
+      // Set loading flag to prevent concurrent loads
+      isLoadingRef.current = true;
+      loadedChatIdRef.current = chatId;
+      
       // Check if user is authenticated before making API call
       const token = typeof window !== "undefined" 
         ? localStorage.getItem("auth_token") 
@@ -38,33 +66,35 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
             page: 1,
             limit: 50,
           });
-          const normalizedMessages = (response.items || []).map((msg) =>
+          const safeItems = Array.isArray(response?.items) ? response.items : [];
+          const normalizedMessages = safeItems.map((msg) =>
             MessageService.normalizeMessage(msg)
           );
           setLocalMessages(normalizedMessages);
-          // Also update store
+          // Also update store (batch updates to avoid triggering re-renders)
           normalizedMessages.forEach((msg) => {
-            addMessageToStore(chatId, msg);
+            if (msg) {
+              addMessageToStoreRef.current(chatId, msg);
+            }
           });
         } else {
           // No token, use store messages
-          const storeMessages = getChatMessages(chatId);
-          setLocalMessages(storeMessages);
+          const storeMessages = getChatMessagesRef.current(chatId);
+          setLocalMessages(Array.isArray(storeMessages) ? storeMessages : []);
         }
       } catch (error) {
         // Fallback to store if API fails
         console.error("Failed to load messages:", error);
-        const storeMessages = getChatMessages(chatId);
-        setLocalMessages(storeMessages);
+        const storeMessages = getChatMessagesRef.current(chatId);
+        setLocalMessages(Array.isArray(storeMessages) ? storeMessages : []);
       } finally {
         setIsLoading(false);
+        isLoadingRef.current = false;
       }
     };
 
-    if (chatId) {
-      loadMessages();
-    }
-  }, [chatId, getChatMessages, addMessageToStore]);
+    loadMessages();
+  }, [chatId]); // Only depend on chatId - use refs to access stable functions
 
   // Join chat room via WebSocket
   useEffect(() => {

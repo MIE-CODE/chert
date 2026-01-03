@@ -8,6 +8,7 @@ import { MessageInput } from "../chat/message-input";
 import { Badge } from "@/app/components/ui/badge";
 import { cn } from "@/app/lib/utils";
 import { useMessages, useDragDrop } from "@/app/hooks";
+import { useToast } from "@/app/components/ui/toast";
 
 interface GroupChatProps {
   groupId: string;
@@ -26,6 +27,7 @@ export function GroupChat({
   onChatDrop,
 }: GroupChatProps & { onChatDrop?: (chat: any) => void }) {
   const currentUserId = "me";
+  const toast = useToast();
   const { messages, sendMessage } = useMessages({ chatId: groupId, currentUserId });
   const { isDragOver, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(
     (data) => {
@@ -34,6 +36,18 @@ export function GroupChat({
       }
     }
   );
+
+  const handleVoiceCall = () => {
+    toast.info("Group voice call feature coming soon");
+  };
+
+  const handleVideoCall = () => {
+    toast.info("Group video call feature coming soon");
+  };
+
+  const handleGroupInfo = () => {
+    toast.info("Group info feature coming soon");
+  };
 
   return (
     <div
@@ -66,13 +80,28 @@ export function GroupChat({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <IconButton variant="ghost" size="md" title="Voice call">
+          <IconButton 
+            variant="ghost" 
+            size="md" 
+            title="Voice call"
+            onClick={handleVoiceCall}
+          >
             <PhoneIcon />
           </IconButton>
-          <IconButton variant="ghost" size="md" title="Video call">
+          <IconButton 
+            variant="ghost" 
+            size="md" 
+            title="Video call"
+            onClick={handleVideoCall}
+          >
             <VideoIcon />
           </IconButton>
-          <IconButton variant="ghost" size="md" title="Group info">
+          <IconButton 
+            variant="ghost" 
+            size="md" 
+            title="Group info"
+            onClick={handleGroupInfo}
+          >
             <MoreIcon />
           </IconButton>
         </div>

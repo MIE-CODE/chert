@@ -83,15 +83,24 @@ class AuthAPI {
    * Get current authenticated user
    */
   async getCurrentUser(): Promise<User> {
-    const response = await apiClient.axiosInstance.get<
-      ApiResponse<{ user: User }>
-    >(`${this.basePath}/me`);
+    try {
+      const response = await apiClient.axiosInstance.get<
+        ApiResponse<{ user: User }>
+      >(`${this.basePath}/me`);
 
-    if (response.data.success && response.data.data) {
-      return response.data.data.user;
+      if (response.data.success && response.data.data) {
+        return response.data.data.user;
+      }
+
+      throw new Error(response.data.message || "Failed to get user");
+    } catch (error: any) {
+      // Preserve timeout and network error flags
+      if (error?.isTimeout || error?.isNetworkError) {
+        error.isTimeout = error.isTimeout || error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+        error.isNetworkError = error.isNetworkError || error.code === 'ERR_NETWORK';
+      }
+      throw error;
     }
-
-    throw new Error(response.data.message || "Failed to get user");
   }
 
   /**

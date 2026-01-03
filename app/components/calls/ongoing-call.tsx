@@ -97,7 +97,10 @@ export function OngoingCall({
             <IconButton
               variant="default"
               size="lg"
-              onClick={() => {}}
+              onClick={() => {
+                // Switch camera functionality
+                console.log("Switching camera");
+              }}
               title="Switch camera"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

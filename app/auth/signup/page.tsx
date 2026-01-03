@@ -82,16 +82,16 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-primary-light to-background px-2 sm:p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-primary-light to-background px-2 sm:p-4 safe-area-inset">
       <div className="w-full max-w-md flex flex-col gap-4">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-primary mb-2">
+        <div className="mb-6 md:mb-8 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">
             Create an account
           </h1>
-          <p className="text-secondary">Join Chert and start chatting</p>
+          <p className="text-sm md:text-base text-secondary">Join Chert and start chatting</p>
         </div>
 
-        <div className="flex flex-col gap-5 bg-surface-elevated rounded-2xl shadow-xl sm:p-8 p-3 border border-border">
+        <div className="flex flex-col gap-4 md:gap-5 bg-surface-elevated rounded-2xl shadow-xl sm:p-6 md:p-8 p-4 border border-border">
           <Formik
             initialValues={{
               name: "",

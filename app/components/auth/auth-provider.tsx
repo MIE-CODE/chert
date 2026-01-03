@@ -4,6 +4,7 @@ import { useEffect, useState, createContext, useContext } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useUserStore } from "@/app/store";
 import { AuthService } from "@/app/services/auth-service";
+import { useToast } from "@/app/components/ui/toast";
 
 interface AuthContextType {
   isInitialized: boolean;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isAuthenticated, currentUser, setCurrentUser } = useUserStore();
   const [isInitialized, setIsInitialized] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let isMounted = true;
@@ -60,9 +62,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               router.replace("/");
             }
           }
-        } catch (error) {
-          // Token is invalid - clear it
-          console.error("Failed to get current user:", error);
+        } catch (error: any) {
+          // Handle errors gracefully - don't break the app
+          const errorMessage = error?.message || "Failed to verify authentication";
+          const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || errorMessage.includes('timeout');
+          const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+          
+          // Show toast notification for timeout/network errors
+          if (isTimeout) {
+            toast.warning("Connection timeout. Please check your internet connection.");
+          } else if (isNetworkError) {
+            toast.warning("Network error. Please check your connection.");
+          } else {
+            // For other errors, just log them (don't show toast for auth errors during initialization)
+            console.error("Failed to get current user:", error);
+          }
+          
+          // Token is invalid or error occurred - clear it
           localStorage.removeItem("auth_token");
           localStorage.removeItem("refresh_token");
           if (isMounted) {
@@ -75,8 +91,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-      } catch (error) {
-        console.error("Auth initialization failed:", error);
+      } catch (error: any) {
+        // Handle errors gracefully - don't break the app
+        const errorMessage = error?.message || "Authentication initialization failed";
+        const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || errorMessage.includes('timeout');
+        const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+        
+        // Show toast notification for timeout/network errors
+        if (isTimeout) {
+          toast.warning("Connection timeout. Please check your internet connection.");
+        } else if (isNetworkError) {
+          toast.warning("Network error. Please check your connection.");
+        } else {
+          console.error("Auth initialization failed:", error);
+        }
+        
         if (isMounted) {
           setIsInitialized(true);
           

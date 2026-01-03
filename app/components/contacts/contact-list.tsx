@@ -6,6 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { SearchIcon, PlusIcon } from "@/app/components/ui/icons";
 import { IconButton } from "@/app/components/ui/icon-button";
 import { cn } from "@/app/lib/utils";
+import { useToast } from "@/app/components/ui/toast";
 
 interface Contact {
   id: string;
@@ -51,6 +52,11 @@ const mockContacts: Contact[] = [
 export function ContactList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const toast = useToast();
+
+  const handleNewContact = () => {
+    toast.info("Add new contact feature coming soon");
+  };
 
   const filteredContacts = mockContacts.filter(
     (contact) =>
@@ -73,7 +79,12 @@ export function ContactList() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border bg-surface-elevated">
         <h1 className="text-xl font-bold text-primary">Contacts</h1>
-        <IconButton variant="ghost" size="md" title="New contact">
+        <IconButton 
+          variant="ghost" 
+          size="md" 
+          title="New contact"
+          onClick={handleNewContact}
+        >
           <PlusIcon />
         </IconButton>
       </div>
@@ -144,10 +155,15 @@ function ContactItem({
         </p>
       </div>
       {!contact.isUser && (
-        <Button variant="secondary" size="sm" onClick={(e) => {
-          e.stopPropagation();
-          // Handle invite
-        }}>
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          onClick={(e) => {
+            e.stopPropagation();
+            // Handle invite - could navigate to invite page or show modal
+            console.log("Invite contact:", contact.name);
+          }}
+        >
           Invite
         </Button>
       )}

@@ -12,7 +12,8 @@ import { cn } from "./lib/utils";
 import { useAuthContext } from "./components/auth/auth-provider";
 import { useUserStore } from "./store";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useToast } from "./components/ui/toast";
 
 function HomeContent() {
   const {
@@ -20,18 +21,56 @@ function HomeContent() {
     selectChat,
     getSelectedChat,
     setSearchQuery,
+    loadChats,
+    chats,
+    isLoadingChats,
   } = useChatStore();
   const { uiState, setShowNewGroup, setShowNewChat } = useUIStore();
+  const { isAuthenticated } = useAuthContext();
+  const { isAuthenticated: userIsAuthenticated } = useUserStore();
+  const toast = useToast();
 
   const selectedChat = getSelectedChat();
+  const hasLoadedChats = useRef(false);
+
+  // Load chats when authenticated (only once, and only if not already loading/loaded)
+  useEffect(() => {
+    if (
+      (isAuthenticated || userIsAuthenticated) &&
+      !hasLoadedChats.current &&
+      !isLoadingChats &&
+      chats.length === 0
+    ) {
+      hasLoadedChats.current = true;
+      loadChats().catch((error: any) => {
+        const errorMessage = error?.message || "Failed to load chats";
+        const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || errorMessage.includes('timeout');
+        const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+
+        if (isTimeout) {
+          toast.warning("Connection timeout. Please check your internet connection.");
+        } else if (isNetworkError) {
+          toast.warning("Network error. Please check your connection.");
+        } else {
+          toast.error(errorMessage);
+        }
+        hasLoadedChats.current = false; // Allow retry on error
+      });
+    }
+    // Reset the ref if user logs out
+    if (!isAuthenticated && !userIsAuthenticated) {
+      hasLoadedChats.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, userIsAuthenticated, isLoadingChats, chats.length]);
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Chat List */}
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Chat List - Hide when showing NewChat/NewGroup on mobile, or when a chat is selected on mobile */}
       <div
         className={`${
-          selectedChat ? "hidden md:flex" : "flex"
-        } w-full md:w-96 border-r border-border`}
+          (uiState.showNewChat || uiState.showNewGroup || selectedChat) ? "hidden md:flex" : "flex"
+        } w-full md:w-96 border-r border-border shrink-0`}
       >
         <ChatList
           selectedChatId={selectedChatId}
@@ -45,7 +84,7 @@ function HomeContent() {
 
       {/* Conversation, New Chat, or New Group */}
       {uiState.showNewChat ? (
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-w-0 w-full md:w-auto absolute md:relative inset-0 z-10 bg-background">
           <NewChat
             onBack={() => setShowNewChat(false)}
             onChatCreated={(chatId) => {
@@ -55,7 +94,7 @@ function HomeContent() {
           />
         </div>
       ) : uiState.showNewGroup ? (
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-w-0 w-full md:w-auto absolute md:relative inset-0 z-10 bg-background">
           <NewGroup
             onBack={() => setShowNewGroup(false)}
             onCreateGroup={(group) => {
@@ -67,7 +106,7 @@ function HomeContent() {
           />
         </div>
       ) : selectedChat ? (
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-w-0 w-full md:w-auto">
           {selectedChat.type === "group" ? (
             <GroupChat
               groupId={selectedChat.id}
