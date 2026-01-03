@@ -170,10 +170,10 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         if (!messageChatId || messageChatId === chatId) {
           console.log("✅ [CHAT] Processing message for current chat:", chatId);
           setLocalMessages((prev) => {
-            // Check if message already exists by ID
+            // Check if message already exists by ID (prevent duplicates)
             const existsById = prev.some((msg) => msg.id === normalizedMessage.id);
             if (existsById) {
-              console.log("Message already exists by ID, skipping:", normalizedMessage.id);
+              console.log("⚠️ Message already exists by ID, skipping duplicate:", normalizedMessage.id);
               return prev;
             }
             
@@ -187,13 +187,27 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
             );
             
             if (tempMessageIndex !== -1 && normalizedMessage.senderId === effectiveUserId) {
-              console.log("Replacing temp message with server message from WebSocket");
+              console.log("✅ Replacing temp message with server message from WebSocket");
               const updated = [...prev];
               updated[tempMessageIndex] = normalizedMessage;
               return updated;
             }
             
-            console.log("Adding new message to local state");
+            // Additional duplicate check: same content and sender within last 2 seconds
+            const now = Date.now();
+            const recentDuplicate = prev.some((msg) => 
+              msg.senderId === normalizedMessage.senderId &&
+              (msg.text === normalizedMessage.text || msg.content === normalizedMessage.content) &&
+              msg.id !== normalizedMessage.id &&
+              Math.abs(parseInt(msg.id) - now) < 2000 // Within 2 seconds
+            );
+            
+            if (recentDuplicate) {
+              console.log("⚠️ Recent duplicate message detected, skipping");
+              return prev;
+            }
+            
+            console.log("✅ Adding new message to local state");
             return [...prev, normalizedMessage];
           });
           addMessageToStore(chatId, normalizedMessage);
@@ -273,78 +287,73 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
           return;
         }
 
-        // Send via WebSocket for real-time
+        // Send via WebSocket for real-time (preferred) OR REST API as fallback
+        // Only use ONE method to prevent duplicate messages
+        let message: any = null;
+        
         if (websocketService.connected) {
-          console.log("📤 Sending message via WebSocket");
+          // Use WebSocket - server will persist and emit 'new_message' event
+          console.log("📤 [SOCKET.IO] Sending message via WebSocket:", { chatId, content: text, type: "text" });
           websocketService.sendMessage({
             chatId,
             content: text,
             type: "text",
           });
+          console.log("✅ [SOCKET.IO] Message sent - will receive via 'new_message' event");
+          // Exit early - WebSocket will handle the message via 'new_message' event
+          return;
         } else {
-          console.warn("⚠️ WebSocket not connected, attempting to connect...");
-          // Try to connect WebSocket if not connected
-          const token = typeof window !== "undefined" 
-            ? localStorage.getItem("auth_token") 
-            : null;
+          // Fallback: Use REST API if WebSocket is not connected
+          console.warn("⚠️ WebSocket not connected, using REST API as fallback");
+          // Try to connect WebSocket for future messages
           if (token) {
             websocketService.connect(token);
-            // Wait a moment and try sending again
-            setTimeout(() => {
-              if (websocketService.connected) {
-                console.log("📤 Retrying WebSocket send after connection");
-                websocketService.sendMessage({
-                  chatId,
-                  content: text,
-                  type: "text",
-                });
-              } else {
-                console.warn("⚠️ WebSocket still not connected after retry");
-              }
-            }, 500);
-          } else {
-            console.error("❌ No auth token available for WebSocket connection");
           }
+          
+          console.log("📤 [REST API] Sending message via REST API (fallback):", { chatId, content: text, type: "text" });
+          message = await messagesAPI.sendMessage({
+            chatId,
+            content: text,
+            type: "text",
+          });
+
+          console.log("✅ [REST API] Message sent - will receive via 'new_message' event");
+          console.log("📨 [REST API] Received message from API:", message);
         }
 
-        // Also send via REST API for persistence (this also triggers 'new_message' event)
-        console.log("📤 [REST API] Sending message via REST API:", { chatId, content: text, type: "text" });
-        const message = await messagesAPI.sendMessage({
-          chatId,
-          content: text,
-          type: "text",
-        });
-
-        console.log("✅ [REST API] Message sent via REST API - should trigger 'new_message' event");
-        console.log("📨 [REST API] Received message from API:", message);
-
-        // Update with server response - match by temp message ID or by content/sender
-        const normalizedMessage = MessageService.normalizeMessage(message);
-        console.log("Normalized message from API:", normalizedMessage);
-        
-        setLocalMessages((prev) => {
-          // Try to find and replace the temp message
-          const tempIndex = prev.findIndex((msg) => msg.id === tempMessage.id);
-          if (tempIndex !== -1) {
-            console.log("Replacing temp message at index:", tempIndex);
-            const updated = [...prev];
-            updated[tempIndex] = normalizedMessage;
-            return updated;
-          } else {
-            // Temp message not found, check if server message already exists
-            const exists = prev.some((msg) => msg.id === normalizedMessage.id);
-            if (!exists) {
-              console.log("Temp message not found, adding server message");
-              return [...prev, normalizedMessage];
+        // Only update if we got a message from REST API (fallback case)
+        if (message) {
+        // Only update if we got a message from REST API (fallback case)
+        // WebSocket messages are handled by the 'new_message' event listener
+        if (message) {
+          const normalizedMessage = MessageService.normalizeMessage(message);
+          console.log("Normalized message from API:", normalizedMessage);
+          
+          setLocalMessages((prev) => {
+            // Try to find and replace the temp message
+            const tempIndex = prev.findIndex((msg) => msg.id === tempMessage.id);
+            if (tempIndex !== -1) {
+              console.log("Replacing temp message at index:", tempIndex);
+              const updated = [...prev];
+              updated[tempIndex] = normalizedMessage;
+              return updated;
             } else {
-              console.log("Server message already exists");
-              return prev;
+              // Temp message not found, check if server message already exists
+              const exists = prev.some((msg) => msg.id === normalizedMessage.id);
+              if (!exists) {
+                console.log("Temp message not found, adding server message");
+                return [...prev, normalizedMessage];
+              } else {
+                console.log("Server message already exists");
+                return prev;
+              }
             }
-          }
-        });
-        
-        // Update store with server message
-        addMessageToStore(chatId, normalizedMessage);
+          });
+          
+          // Update store with server message
+          addMessageToStore(chatId, normalizedMessage);
+        }
+        }
       } catch (error) {
         // Remove temp message on error
         setLocalMessages((prev) =>
