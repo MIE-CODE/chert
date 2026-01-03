@@ -33,6 +33,9 @@ export class MessageService {
     // Extract ID (handle both _id and id)
     const id = message.id || message._id || "";
     
+    // Extract chatId (important for WebSocket messages)
+    const chatId = message.chatId || message.chat?._id || message.chat?.id || "";
+    
     // Extract senderId (handle both string and object)
     let senderId = "";
     let senderName = "";
@@ -91,8 +94,7 @@ export class MessageService {
       timestamp = new Date().toISOString();
     }
     
-    // Extract other fields
-    const chatId = message.chatId || "";
+    // Extract other fields (chatId already extracted above)
     const safeReadBy = Array.isArray(message.readBy) ? message.readBy : [];
     const isRead = message.isRead !== undefined ? message.isRead : (safeReadBy.length > 0 || false);
     const isDelivered = message.isDelivered !== undefined ? message.isDelivered : (message.status === "sent" || message.status === "delivered");

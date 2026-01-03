@@ -47,14 +47,14 @@ export function MessageBubble({
   return (
     <div className={cn(
       "flex gap-2 mb-1 w-full",
-      !isOwn ? "justify-end" : "justify-start"
+     isOwn ? "justify-end" : "justify-start"
     )}>
       {showAvatar && !isOwn && (
         <Avatar
           src={undefined}
           name={message.senderName}
           size="sm"
-          className="mt-1 shrink-0"
+          className="mt-1 shrink-0 "
         />
       )}
       <div className={cn(

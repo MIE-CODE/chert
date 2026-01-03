@@ -17,12 +17,14 @@ export function useWebSocket() {
       ? localStorage.getItem("auth_token") 
       : null;
 
-    if (token && !websocketService.connected) {
+    if (token && currentUser && !websocketService.connected) {
+      console.log("Connecting WebSocket...");
       websocketService.connect(token);
     }
 
     return () => {
       if (!currentUser) {
+        console.log("Disconnecting WebSocket (user logged out)");
         websocketService.disconnect();
       }
     };

@@ -96,30 +96,73 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     loadMessages();
   }, [chatId]); // Only depend on chatId - use refs to access stable functions
 
-  // Join chat room via WebSocket
+  // Join chat room via WebSocket and listen for messages
   useEffect(() => {
-    if (chatId && websocketService.connected) {
-      websocketService.joinChat(chatId);
+    if (!chatId) return;
 
-      // Listen for new messages
-      const handleNewMessage = (data: { message: Message }) => {
-        if (data.message) {
-          const normalizedMessage = MessageService.normalizeMessage(data.message);
-          // Only add if it's for this chat or if chatId matches
-          if (!normalizedMessage.chatId || normalizedMessage.chatId === chatId) {
-            setLocalMessages((prev) => [...prev, normalizedMessage]);
-            addMessageToStore(chatId, normalizedMessage);
-          }
+    // Function to join chat room
+    const joinChatRoom = () => {
+      if (websocketService.connected) {
+        console.log("Joining chat room:", chatId);
+        websocketService.joinChat(chatId);
+      } else {
+        console.log("WebSocket not connected, cannot join chat:", chatId);
+      }
+    };
+
+    // Listen for new messages
+    const handleNewMessage = (data: { message: Message }) => {
+      if (data.message) {
+        const normalizedMessage = MessageService.normalizeMessage(data.message);
+        // Extract chatId from message (could be in normalizedMessage or data.message)
+        const messageChatId = normalizedMessage.chatId || data.message.chatId || (data.message as any).chat?._id || (data.message as any).chat?.id;
+        
+        // Only add if it's for this chat or if chatId matches
+        if (!messageChatId || messageChatId === chatId) {
+          console.log("Received new message via WebSocket for chat", chatId, ":", normalizedMessage);
+          setLocalMessages((prev) => {
+            // Check if message already exists to avoid duplicates
+            const exists = prev.some((msg) => msg.id === normalizedMessage.id);
+            if (exists) {
+              console.log("Message already exists, skipping:", normalizedMessage.id);
+              return prev;
+            }
+            console.log("Adding new message to local state");
+            return [...prev, normalizedMessage];
+          });
+          addMessageToStore(chatId, normalizedMessage);
+        } else {
+          console.log("Message is for different chat, ignoring. Expected:", chatId, "Got:", messageChatId);
         }
-      };
+      }
+    };
 
-      websocketService.on("new_message", handleNewMessage);
+    // Set up message listener first (before checking connection)
+    websocketService.on("new_message", handleNewMessage);
+    
+    // Set up connection listener to join chat when connected
+    const handleConnect = () => {
+      console.log("WebSocket connected, joining chat:", chatId);
+      joinChatRoom();
+    };
 
-      return () => {
-        websocketService.off("new_message", handleNewMessage);
-        websocketService.leaveChat(chatId);
-      };
+    websocketService.on("connect", handleConnect);
+
+    // Join immediately if already connected
+    if (websocketService.connected) {
+      joinChatRoom();
+    } else {
+      console.log("WebSocket not yet connected, will join when it connects");
     }
+
+    return () => {
+      console.log("Cleaning up WebSocket listeners for chat:", chatId);
+      websocketService.off("new_message", handleNewMessage);
+      websocketService.off("connect", handleConnect);
+      if (websocketService.connected) {
+        websocketService.leaveChat(chatId);
+      }
+    };
   }, [chatId, addMessageToStore]);
 
   // Auto-scroll to bottom when messages change
