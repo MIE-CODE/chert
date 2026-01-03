@@ -118,9 +118,19 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
       }
 
       const chat = await chatsAPI.startChat(userPhoneNumber);
-console.log("chat", chat);
+      console.log("✅ New chat created:", chat);
+      
       // Add chat to store
       addChat(chat);
+      
+      // Join the new chat room via WebSocket (server auto-joins, but we can explicitly join)
+      const { websocketService } = await import("@/app/services/api");
+      if (websocketService.connected) {
+        console.log("📡 Joining new chat room via WebSocket:", chat.id);
+        websocketService.joinChat(chat.id);
+      } else {
+        console.warn("⚠️ WebSocket not connected, cannot join new chat room");
+      }
       
       // Select the new chat
       selectChat(chat.id);

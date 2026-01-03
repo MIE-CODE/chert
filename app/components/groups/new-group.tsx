@@ -172,8 +172,20 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
                   isGroup: true,
                   name: groupName,
                 });
+                console.log("✅ New group chat created:", chat);
+                
                 // Add chat to store
                 addChat(chat);
+                
+                // Join the new group chat room via WebSocket (server auto-joins, but we can explicitly join)
+                const { websocketService } = await import("@/app/services/api");
+                if (websocketService.connected) {
+                  console.log("📡 Joining new group chat room via WebSocket:", chat.id);
+                  websocketService.joinChat(chat.id);
+                } else {
+                  console.warn("⚠️ WebSocket not connected, cannot join new group chat room");
+                }
+                
                 onCreateGroup?.({
                   name: groupName,
                   members: selectedMembers,

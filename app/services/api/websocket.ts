@@ -6,7 +6,10 @@
 import { io, Socket } from "socket.io-client";
 import { Message } from "@/app/store/types";
 
+// Socket.IO automatically handles protocol conversion (HTTP/HTTPS to WS/WSS)
+// So we can use the API URL directly
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+console.log("🔌 WebSocket URL:", SOCKET_URL);
 
 export interface SocketEvents {
   // Client → Server
@@ -59,16 +62,18 @@ class WebSocketService {
    */
   connect(token: string): void {
     if (this.socket?.connected) {
-      console.log("WebSocket already connected");
+      console.log("✅ WebSocket already connected");
       return;
     }
 
     // Disconnect existing socket if any
     if (this.socket) {
+      console.log("Disconnecting existing socket...");
       this.socket.disconnect();
       this.socket = null;
     }
 
+    console.log("🔌 Connecting to WebSocket server:", SOCKET_URL);
     this.socket = io(SOCKET_URL, {
       auth: {
         token, // Pass token in auth object as per backend guide
@@ -78,12 +83,14 @@ class WebSocketService {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity, // Keep trying to reconnect
+      timeout: 20000, // 20 second connection timeout
     });
 
     this.socket.on("connect", () => {
       this.isConnected = true;
       console.log("✅ WebSocket connected");
       console.log("Socket ID:", this.socket?.id);
+      console.log("Server URL:", SOCKET_URL);
       // Server automatically joins user to all their chat rooms on connect
     });
 
@@ -148,7 +155,23 @@ class WebSocketService {
     replyTo?: string;
   }): void {
     if (this.socket?.connected) {
+      console.log("📤 Sending message via WebSocket:", data);
       this.socket.emit("send_message", data);
+    } else {
+      console.warn("⚠️ WebSocket not connected, cannot send message:", data);
+      // Try to reconnect if we have a token
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      if (token) {
+        console.log("Attempting to reconnect WebSocket...");
+        this.connect(token);
+        // Wait a bit and try again
+        setTimeout(() => {
+          if (this.socket?.connected) {
+            console.log("Retrying WebSocket send after reconnection");
+            this.socket.emit("send_message", data);
+          }
+        }, 1000);
+      }
     }
   }
 

@@ -32,10 +32,11 @@ export function useWebSocket() {
     };
   }, [currentUser]);
 
-  // Handle connection events
+  // Handle connection events and global message listener for testing
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ WebSocket connected - User automatically joined to all chat rooms");
+      console.log("📡 Listening for 'new_message' events...");
     };
 
     const handleDisconnect = (reason: string) => {
@@ -55,16 +56,29 @@ export function useWebSocket() {
       console.error("WebSocket error:", error.message);
     };
 
+    // Global listener for new_message events (for testing)
+    const handleNewMessage = (data: { message: any }) => {
+      console.log("📨 [GLOBAL] New message received via WebSocket:", data.message);
+      console.log("📨 [GLOBAL] Message details:", {
+        id: data.message?.id || data.message?._id,
+        chatId: data.message?.chatId || data.message?.chat?._id || data.message?.chat?.id,
+        senderId: data.message?.senderId || data.message?.sender?._id || data.message?.sender?.id,
+        content: data.message?.content || data.message?.text,
+      });
+    };
+
     websocketService.on("connect", handleConnect);
     websocketService.on("disconnect", handleDisconnect);
     websocketService.on("connect_error", handleConnectError);
     websocketService.on("error", handleError);
+    websocketService.on("new_message", handleNewMessage);
 
     return () => {
       websocketService.off("connect", handleConnect);
       websocketService.off("disconnect", handleDisconnect);
       websocketService.off("connect_error", handleConnectError);
       websocketService.off("error", handleError);
+      websocketService.off("new_message", handleNewMessage);
     };
   }, []);
 

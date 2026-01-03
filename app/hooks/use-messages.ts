@@ -156,13 +156,19 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     // Listen for new messages
     const handleNewMessage = (data: { message: Message }) => {
       if (data.message) {
+        console.log("📨 [CHAT] New message event received for chat:", chatId);
+        console.log("📨 [CHAT] Raw message data:", data.message);
+        
         const normalizedMessage = MessageService.normalizeMessage(data.message);
         // Extract chatId from message (could be in normalizedMessage or data.message)
         const messageChatId = normalizedMessage.chatId || data.message.chatId || (data.message as any).chat?._id || (data.message as any).chat?.id;
         
+        console.log("📨 [CHAT] Normalized message:", normalizedMessage);
+        console.log("📨 [CHAT] Message chatId:", messageChatId, "Current chatId:", chatId);
+        
         // Only add if it's for this chat or if chatId matches
         if (!messageChatId || messageChatId === chatId) {
-          console.log("Received new message via WebSocket for chat", chatId, ":", normalizedMessage);
+          console.log("✅ [CHAT] Processing message for current chat:", chatId);
           setLocalMessages((prev) => {
             // Check if message already exists by ID
             const existsById = prev.some((msg) => msg.id === normalizedMessage.id);
@@ -269,25 +275,48 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
 
         // Send via WebSocket for real-time
         if (websocketService.connected) {
-          console.log("Sending message via WebSocket");
+          console.log("📤 Sending message via WebSocket");
           websocketService.sendMessage({
             chatId,
             content: text,
             type: "text",
           });
         } else {
-          console.log("WebSocket not connected, skipping WebSocket send");
+          console.warn("⚠️ WebSocket not connected, attempting to connect...");
+          // Try to connect WebSocket if not connected
+          const token = typeof window !== "undefined" 
+            ? localStorage.getItem("auth_token") 
+            : null;
+          if (token) {
+            websocketService.connect(token);
+            // Wait a moment and try sending again
+            setTimeout(() => {
+              if (websocketService.connected) {
+                console.log("📤 Retrying WebSocket send after connection");
+                websocketService.sendMessage({
+                  chatId,
+                  content: text,
+                  type: "text",
+                });
+              } else {
+                console.warn("⚠️ WebSocket still not connected after retry");
+              }
+            }, 500);
+          } else {
+            console.error("❌ No auth token available for WebSocket connection");
+          }
         }
 
-        // Also send via API for persistence
-        console.log("Sending message via API");
+        // Also send via REST API for persistence (this also triggers 'new_message' event)
+        console.log("📤 [REST API] Sending message via REST API:", { chatId, content: text, type: "text" });
         const message = await messagesAPI.sendMessage({
           chatId,
           content: text,
           type: "text",
         });
 
-        console.log("Received message from API:", message);
+        console.log("✅ [REST API] Message sent via REST API - should trigger 'new_message' event");
+        console.log("📨 [REST API] Received message from API:", message);
 
         // Update with server response - match by temp message ID or by content/sender
         const normalizedMessage = MessageService.normalizeMessage(message);
