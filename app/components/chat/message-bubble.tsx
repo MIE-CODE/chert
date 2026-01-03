@@ -49,14 +49,14 @@ export function MessageBubble({
       "flex gap-2 mb-1 w-full",
      isOwn ? "justify-end" : "justify-start"
     )}>
-      {showAvatar && !isOwn && (
+      {/* {showAvatar && !isOwn && (
         <Avatar
           src={undefined}
           name={message.senderName}
           size="sm"
           className="mt-1 shrink-0 "
         />
-      )}
+      )} */}
       <div className={cn(
         "flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[60%]",
         isOwn ? "items-end ml-auto" : "items-start"
@@ -74,11 +74,11 @@ export function MessageBubble({
               : "bg-message-received text-message-received-text rounded-bl-md"
           )}
         >
-          {!isOwn && (
+          {/* {!isOwn && (
             <div className="text-xs font-medium mb-0.5 md:mb-1 opacity-80">
               {message.senderName}
             </div>
-          )}
+          )} */}
           <p className="text-xs md:text-sm whitespace-pre-wrap wrap-break-word">{messageText}</p>
           <div
             className={cn(
