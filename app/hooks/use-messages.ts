@@ -3,7 +3,7 @@
  * Manages message state and operations for a chat
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Message } from "@/app/store/types";
 import { useChatStore, useUserStore } from "@/app/store";
 import { MessageService } from "@/app/services/message-service";
@@ -26,7 +26,8 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
   const isLoadingRef = useRef(false);
   
   // Fallback: Get user ID from token if currentUserId is empty
-  const getEffectiveUserId = (): string => {
+  // Use useMemo to ensure stable reference
+  const effectiveUserId = useMemo(() => {
     if (currentUserId) {
       return currentUserId;
     }
@@ -54,9 +55,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     }
     
     return "";
-  };
-  
-  const effectiveUserId = getEffectiveUserId();
+  }, [currentUserId, currentUser?.id]);
   
   // Store function references in refs to avoid dependency issues
   const getChatMessagesRef = useRef(getChatMessages);
@@ -224,7 +223,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         websocketService.leaveChat(chatId);
       }
     };
-  }, [chatId, addMessageToStore, effectiveUserId, currentUser]);
+  }, [chatId, addMessageToStore, effectiveUserId]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
