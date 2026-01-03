@@ -89,7 +89,7 @@ export function Conversation({
       <div className=" flex flex-col gap-4 flex-1 overflow-y-auto p-4 space-y-1">
         {messages.map((message, index) => (
           <MessageBubble
-            key={message.id}
+            key={message.id || `message-${index}`}
             message={message}
             currentUserId={currentUserId}
             showAvatar={shouldShowAvatar(index) && message.senderId !== currentUserId}

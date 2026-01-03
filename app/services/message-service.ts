@@ -29,14 +29,66 @@ export class MessageService {
   /**
    * Normalizes message from API format
    */
-  static normalizeMessage(message: Message): Message {
+  static normalizeMessage(message: any): Message {
+    // Extract ID (handle both _id and id)
+    const id = message.id || message._id || "";
+    
+    // Extract senderId (handle both string and object)
+    let senderId = "";
+    let senderName = "";
+    
+    if (typeof message.senderId === "string") {
+      senderId = message.senderId;
+      senderName = message.senderName || message.sender?.name || message.sender?.username || "Unknown";
+    } else if (message.senderId && typeof message.senderId === "object") {
+      senderId = message.senderId._id || message.senderId.id || "";
+      senderName = message.senderId.username || message.senderId.name || "Unknown";
+    } else {
+      senderId = message.senderId || "";
+      senderName = message.senderName || "Unknown";
+    }
+    
+    // Extract text/content
+    const text = message.text || message.content || "";
+    const content = message.content || message.text || "";
+    
+    // Extract timestamp (handle createdAt, updatedAt, timestamp)
+    let timestamp: Date | string;
+    const timestampValue = message.timestamp || message.createdAt || message.updatedAt;
+    if (timestampValue) {
+      timestamp = typeof timestampValue === "string" 
+        ? new Date(timestampValue) 
+        : timestampValue;
+    } else {
+      timestamp = new Date();
+    }
+    
+    // Extract other fields
+    const chatId = message.chatId || "";
+    const isRead = message.isRead !== undefined ? message.isRead : (message.readBy?.length > 0 || false);
+    const isDelivered = message.isDelivered !== undefined ? message.isDelivered : (message.status === "sent" || message.status === "delivered");
+    
     return {
-      ...message,
-      text: message.text || message.content || "",
-      timestamp: typeof message.timestamp === "string" 
-        ? new Date(message.timestamp) 
-        : message.timestamp,
+      id,
+      text,
+      content,
+      chatId,
+      senderId,
+      senderName,
+      timestamp,
+      isRead,
+      isDelivered,
+      reactions: message.reactions || [],
+      replyTo: message.replyTo || undefined,
+      attachments: message.attachments || undefined,
     };
+  }
+  
+  /**
+   * Gets message text safely from either text or content field
+   */
+  static getMessageText(message: Message): string {
+    return message.text || message.content || "";
   }
 
   /**

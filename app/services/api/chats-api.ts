@@ -33,6 +33,21 @@ class ChatsAPI {
   private basePath = "/api/chats";
 
   /**
+   * Start a new chat with a user (one-to-one)
+   */
+  async startChat(phoneNumber: string): Promise<Chat> {
+    const response = await apiClient.axiosInstance.post<
+      ApiResponse<{ chat: Chat }>
+    >(`${this.basePath}/start`, { phoneNumber });
+
+    if (response.data.success && response.data.data) {
+      return response.data.data.chat;
+    }
+
+    throw new Error(response.data.message || "Failed to start chat");
+  }
+
+  /**
    * Create a new chat (one-to-one or group)
    */
   async createChat(data: CreateChatRequest): Promise<Chat> {

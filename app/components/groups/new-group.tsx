@@ -36,6 +36,7 @@ const mockContacts: Contact[] = [
 
 export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
   const { addChat } = useChatStore();
+  const toast = useToast();
   const [groupName, setGroupName] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");

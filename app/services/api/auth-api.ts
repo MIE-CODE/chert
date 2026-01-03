@@ -108,15 +108,33 @@ class AuthAPI {
   /**
    * Refresh access token
    */
-  async refreshToken(): Promise<string> {
+  async refreshToken(refreshToken?: string): Promise<string> {
+    // Get refresh token from localStorage if not provided
+    const tokenToSend = refreshToken || 
+      (typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null);
+    
+    if (!tokenToSend) {
+      throw new Error("No refresh token available");
+    }
+
     const response = await apiClient.axiosInstance.post<
       ApiResponse<{ token: string; refreshToken: string }>
-    >(`${this.basePath}/refresh-token`);
+    >(`${this.basePath}/refresh-token`, {
+      refreshToken: tokenToSend,
+    });
 
     if (response.data.success && response.data.data) {
-      const { token, refreshToken } = response.data.data;
-      apiClient.setAuthTokens(token, refreshToken);
-      return token;
+      // Handle both response.data.data and direct response formats
+      const responseData = response.data.data as any;
+      const token = responseData.token || responseData.accessToken;
+      const newRefreshToken = responseData.refreshToken || responseData.refresh_token;
+      
+      if (token && newRefreshToken) {
+        apiClient.setAuthTokens(token, newRefreshToken);
+        return token;
+      } else {
+        throw new Error("Invalid refresh token response format");
+      }
     }
 
     throw new Error(response.data.message || "Token refresh failed");

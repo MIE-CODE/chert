@@ -81,11 +81,13 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
     setError(null);
 
     try {
-      // Create one-on-one chat
-      const chat = await chatsAPI.createChat({
-        participantIds: [selectedUser.id],
-        isGroup: false,
-      });
+      // Start one-on-one chat using the phone number
+      const userPhoneNumber = selectedUser.phone || phoneNumber.trim().replace(/\D/g, "");
+      if (!userPhoneNumber) {
+        throw new Error("Phone number is required");
+      }
+
+      const chat = await chatsAPI.startChat(userPhoneNumber);
 
       // Add chat to store
       addChat(chat);
@@ -97,12 +99,12 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
       onChatCreated?.(chat.id);
       
       // Show success toast
-      toast.success("Chat created successfully!");
+      toast.success(`Chat with ${selectedUser.name} created successfully!`);
       
       // Close the modal
       onBack?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to create chat";
+      const errorMessage = err instanceof Error ? err.message : "Failed to start chat";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

@@ -8,6 +8,7 @@ import { Message } from "@/app/store/types";
 import { useChatStore } from "@/app/store";
 import { MessageService } from "@/app/services/message-service";
 import { messagesAPI, websocketService } from "@/app/services/api";
+import { useToast } from "../components/ui/toast";
 
 interface UseMessagesOptions {
   chatId: string;

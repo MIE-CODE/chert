@@ -128,11 +128,23 @@ class ApiClient {
     this.refreshTokenPromise = axios
       .post(`${API_BASE_URL}/api/auth/refresh-token`, {
         refreshToken,
+      }, {
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
       .then((response) => {
-        const { token, refreshToken: newRefreshToken } = response.data.data;
-        this.setTokens(token, newRefreshToken);
-        return token;
+        // Handle both response.data.data and response.data formats
+        const responseData = response.data.data || response.data;
+        const token = responseData.token || responseData.accessToken;
+        const newRefreshToken = responseData.refreshToken || responseData.refresh_token;
+        
+        if (token && newRefreshToken) {
+          this.setTokens(token, newRefreshToken);
+          return token;
+        } else {
+          throw new Error("Invalid refresh token response");
+        }
       })
       .catch(() => {
         this.clearTokens();

@@ -12,6 +12,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Chert - Modern Chat Application",
   description: "A modern, full-featured chat application with beautiful UI",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [
+      { url: "/apple-icon.svg", sizes: "180x180", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export default function RootLayout({

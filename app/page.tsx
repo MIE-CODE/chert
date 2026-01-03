@@ -9,6 +9,10 @@ import { NewChat } from "./components/chat/new-chat";
 import { ProtectedRoute } from "./components/auth/protected-route";
 import { useChatStore, useUIStore } from "./store";
 import { cn } from "./lib/utils";
+import { useAuthContext } from "./components/auth/auth-provider";
+import { useUserStore } from "./store";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 function HomeContent() {
   const {
@@ -158,6 +162,33 @@ function DropZone({
 }
 
 export default function Home() {
+  const router = useRouter();
+  const { isInitialized, isAuthenticated } = useAuthContext();
+  const { isAuthenticated: userIsAuthenticated } = useUserStore();
+
+  // Redirect to landing page if not authenticated
+  useEffect(() => {
+    if (isInitialized && !isAuthenticated && !userIsAuthenticated) {
+      router.replace("/landing");
+    }
+  }, [isInitialized, isAuthenticated, userIsAuthenticated, router]);
+
+  // Show loading while checking auth
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated (redirect in progress)
+  if (!isAuthenticated && !userIsAuthenticated) {
+    return null;
+  }
+
   return (
     <ProtectedRoute>
       <HomeContent />

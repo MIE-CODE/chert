@@ -297,13 +297,31 @@ export function ChatStoreProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // Extract last message text from various formats
+    const getLastMessageText = (lastMessage: any): string => {
+      if (!lastMessage) return "";
+      
+      // If it's already a string, return it
+      if (typeof lastMessage === "string") {
+        return lastMessage;
+      }
+      
+      // If it's an object (message), extract the text content
+      if (typeof lastMessage === "object") {
+        return lastMessage.text || lastMessage.content || "";
+      }
+      
+      return "";
+    };
+
     const timestampValue = apiChat.timestamp || apiChat.updatedAt || apiChat.lastMessageAt;
+    const lastMessageValue = apiChat.lastMessage || apiChat.lastMessageText || apiChat.lastMessageContent;
     
     return {
       id: apiChat.id || apiChat._id,
       name: apiChat.name || apiChat.title || "Unknown",
       avatar: apiChat.avatar || apiChat.image,
-      lastMessage: apiChat.lastMessage || apiChat.lastMessageText || apiChat.lastMessageContent || "",
+      lastMessage: getLastMessageText(lastMessageValue),
       timestamp: formatTimestamp(timestampValue) || new Date().toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
