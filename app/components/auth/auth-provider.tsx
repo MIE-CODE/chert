@@ -52,10 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Token exists - validate it by fetching current user
         try {
+          console.log("AuthProvider: Fetching current user...");
           const user = await AuthService.getCurrentUser();
+          console.log("AuthProvider: Received user from API:", user);
           if (isMounted) {
+            console.log("AuthProvider: Setting user in store:", user);
             setCurrentUser(user);
             setIsInitialized(true);
+            console.log("AuthProvider: User set, auth initialized");
             
             // If on auth pages, redirect to home
             if (pathname?.startsWith("/auth")) {

@@ -36,6 +36,28 @@ class AuthAPI {
   private basePath = "/api/auth";
 
   /**
+   * Normalize user object from API to match User interface
+   */
+  private normalizeUser(apiUser: any): User {
+    const normalized = {
+      id: apiUser.id || apiUser._id || "",
+      name: apiUser.name || apiUser.username || "Unknown",
+      username: apiUser.username,
+      email: apiUser.email,
+      phone: apiUser.phone || apiUser.phoneNumber,
+      avatar: apiUser.avatar || apiUser.image || "",
+      status: apiUser.status || "",
+      isOnline: apiUser.isOnline || false,
+    };
+    
+    if (!normalized.id) {
+      console.error("User normalization failed - missing ID:", apiUser);
+    }
+    
+    return normalized;
+  }
+
+  /**
    * Register a new user
    */
   async signup(data: SignupRequest): Promise<AuthResponse> {
@@ -45,13 +67,16 @@ class AuthAPI {
 
     if (response.data.success && response.data.data) {
       const { token, refreshToken, user } = response.data.data;
+      // Normalize user object to ensure it matches User interface
+      const normalizedUser = this.normalizeUser(user);
       if (token && refreshToken) {
         apiClient.setAuthTokens(token, refreshToken);
         console.debug("Signup successful, tokens stored");
       } else {
         console.error("Signup response missing token or refreshToken");
       }
-      return { user, token, refreshToken };
+      console.log("Signup - Normalized user:", normalizedUser);
+      return { user: normalizedUser, token, refreshToken };
     }
 
     throw new Error(response.data.message || "Signup failed");
@@ -67,13 +92,16 @@ class AuthAPI {
 
     if (response.data.success && response.data.data) {
       const { token, refreshToken, user } = response.data.data;
+      // Normalize user object to ensure it matches User interface
+      const normalizedUser = this.normalizeUser(user);
       if (token && refreshToken) {
         apiClient.setAuthTokens(token, refreshToken);
         console.debug("Login successful, tokens stored");
       } else {
         console.error("Login response missing token or refreshToken");
       }
-      return { user, token, refreshToken };
+      console.log("Login - Normalized user:", normalizedUser);
+      return { user: normalizedUser, token, refreshToken };
     }
 
     throw new Error(response.data.message || "Login failed");
@@ -85,11 +113,22 @@ class AuthAPI {
   async getCurrentUser(): Promise<User> {
     try {
       const response = await apiClient.axiosInstance.get<
-        ApiResponse<{ user: User }>
+        ApiResponse<{ user: any } | User>
       >(`${this.basePath}/me`);
 
       if (response.data.success && response.data.data) {
-        return response.data.data.user;
+        // Handle both nested { user: {...} } and direct user object
+        const userData = (response.data.data as any).user || response.data.data;
+        const normalizedUser = this.normalizeUser(userData);
+        
+        // Validate that we have an ID
+        if (!normalizedUser.id) {
+          console.error("User object missing ID:", userData);
+          throw new Error("Invalid user data: missing ID");
+        }
+        
+        console.log("Normalized user:", normalizedUser);
+        return normalizedUser;
       }
 
       throw new Error(response.data.message || "Failed to get user");
@@ -99,6 +138,7 @@ class AuthAPI {
         error.isTimeout = error.isTimeout || error.code === 'ECONNABORTED' || error.message?.includes('timeout');
         error.isNetworkError = error.isNetworkError || error.code === 'ERR_NETWORK';
       }
+      console.error("getCurrentUser error:", error);
       throw error;
     }
   }

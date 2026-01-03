@@ -34,12 +34,43 @@ export function Conversation({
   onChatDrop,
 }: ConversationProps & { onChatDrop?: (chat: any) => void }) {
   const { currentUser } = useUserStore();
-  const currentUserId = currentUser?.id || "";
   const toast = useToast();
+  
+  // Try to get user ID from currentUser, or fallback to token payload
+  const getCurrentUserId = (): string => {
+    if (currentUser?.id) {
+      return currentUser.id;
+    }
+    
+    // Fallback: Try to decode JWT token to get user ID
+    if (typeof window !== "undefined") {
+      try {
+        const token = localStorage.getItem("auth_token");
+        if (token) {
+          // Decode JWT (simple base64 decode, not full validation)
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          const userId = payload.id || payload.userId || payload._id || payload.sub;
+          if (userId) {
+            console.warn("Using user ID from token payload:", userId);
+            return userId;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to decode token:", error);
+      }
+    }
+    
+    return "";
+  };
+  
+  const currentUserId = getCurrentUserId();
   
   // Debug: Log current user ID to verify it's being set correctly
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     console.log("Conversation - Current User ID:", currentUserId, "Current User:", currentUser);
+    if (!currentUser) {
+      console.warn("⚠️ Current user is null! Messages may not align correctly.");
+    }
   }
   const { messages, messagesEndRef, sendMessage, shouldShowDate, shouldShowAvatar } =
     useMessages({ chatId, currentUserId });

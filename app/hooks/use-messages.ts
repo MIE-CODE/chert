@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Message } from "@/app/store/types";
-import { useChatStore } from "@/app/store";
+import { useChatStore, useUserStore } from "@/app/store";
 import { MessageService } from "@/app/services/message-service";
 import { messagesAPI, websocketService } from "@/app/services/api";
 import { useToast } from "../components/ui/toast";
@@ -17,12 +17,46 @@ interface UseMessagesOptions {
 
 export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
   const { getChatMessages, addMessage: addMessageToStore } = useChatStore();
+  const { currentUser } = useUserStore();
   const toast = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const loadedChatIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
+  
+  // Fallback: Get user ID from token if currentUserId is empty
+  const getEffectiveUserId = (): string => {
+    if (currentUserId) {
+      return currentUserId;
+    }
+    
+    // Try to get from currentUser
+    if (currentUser?.id) {
+      return currentUser.id;
+    }
+    
+    // Fallback: Try to decode JWT token to get user ID
+    if (typeof window !== "undefined") {
+      try {
+        const token = localStorage.getItem("auth_token");
+        if (token) {
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          const userId = payload.id || payload.userId || payload._id || payload.sub;
+          if (userId) {
+            console.warn("useMessages: Using user ID from token payload:", userId);
+            return userId;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to decode token in useMessages:", error);
+      }
+    }
+    
+    return "";
+  };
+  
+  const effectiveUserId = getEffectiveUserId();
   
   // Store function references in refs to avoid dependency issues
   const getChatMessagesRef = useRef(getChatMessages);
@@ -142,12 +176,12 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
             // If so, replace the temp message instead of adding duplicate
             const tempMessageIndex = prev.findIndex((msg) => 
               msg.senderId === normalizedMessage.senderId &&
-              msg.senderId === currentUserId &&
+              msg.senderId === effectiveUserId &&
               (msg.text === normalizedMessage.text || msg.content === normalizedMessage.content) &&
               (msg.id.match(/^\d+$/) || msg.id.startsWith("temp-")) // Temp messages have timestamp IDs
             );
             
-            if (tempMessageIndex !== -1 && normalizedMessage.senderId === currentUserId) {
+            if (tempMessageIndex !== -1 && normalizedMessage.senderId === effectiveUserId) {
               console.log("Replacing temp message with server message from WebSocket");
               const updated = [...prev];
               updated[tempMessageIndex] = normalizedMessage;
@@ -190,7 +224,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         websocketService.leaveChat(chatId);
       }
     };
-  }, [chatId, addMessageToStore, currentUserId]);
+  }, [chatId, addMessageToStore, effectiveUserId, currentUser]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -206,7 +240,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
 
       const tempMessage = MessageService.createMessage(
         text,
-        currentUserId,
+        effectiveUserId,
         "Me"
       );
 
@@ -292,7 +326,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         toast.error(errorMessage);
       }
     },
-    [chatId, currentUserId, addMessageToStore]
+    [chatId, effectiveUserId, addMessageToStore]
   );
 
   /**
@@ -316,7 +350,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     return MessageService.shouldShowAvatar(
       message,
       previousMessage,
-      currentUserId
+      effectiveUserId
     );
   };
 
