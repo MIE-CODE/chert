@@ -26,6 +26,11 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Helper to check if a user is selected
+  const isUserSelected = (userId: string): boolean => {
+    return selectedUser !== null && selectedUser.id === userId;
+  };
 
   // Search users by phone number
   const handleSearch = async () => {
@@ -50,14 +55,14 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
 
     try {
       // Search users by phone number - try phone-specific search first, fallback to general search
-      let results: Contact[];
+      let results: Contact[] = [];
       try {
         results = await usersAPI.searchByPhone(cleanPhone);
       } catch {
         // Fallback to general search if phone-specific endpoint doesn't exist
         results = await usersAPI.searchUsers(cleanPhone);
       }
-      setSearchResults(results);
+      setSearchResults(results as Contact[]);
       
       if (results.length === 0) {
         const errorMsg = "No user found with this phone number";
@@ -168,7 +173,7 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
 
       {/* Search Results */}
       <div className="flex-1 overflow-y-auto p-4">
-        {selectedUser ? (
+        {selectedUser !== null ? (
           <div className="space-y-4">
             <div className="text-center py-4">
               <p className="text-sm text-secondary mb-4">Selected user:</p>
@@ -202,64 +207,72 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
               </div>
             </div>
           </div>
-        ) : searchResults.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-secondary mb-2">
-              Search Results
-            </p>
-            {searchResults.map((user) => (
-              <div
-                key={user.id}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-surface transition-colors",
-                  selectedUser?.id === user.id && "bg-primary-light"
-                )}
-                onClick={() => setSelectedUser(user)}
-              >
-                <Avatar
-                  src={user.avatar}
-                  name={user.name}
-                  size="md"
-                  online={user.isOnline}
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-primary truncate">
-                    {user.name}
-                  </h3>
-                  {user.phone && (
-                    <p className="text-sm text-secondary truncate">
-                      {user.phone}
-                    </p>
-                  )}
-                  {user.email && (
-                    <p className="text-xs text-tertiary truncate">
-                      {user.email}
-                    </p>
-                  )}
-                </div>
-                {selectedUser?.id === user.id && (
-                  <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                    <svg
-                      className="w-3 h-3 text-inverse"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
+        ) : (
+          <>
+            {searchResults.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-secondary mb-2">
+                  Search Results
+                </p>
+                {(searchResults as Contact[]).map((user: Contact) => {
+                  const isSelected = isUserSelected(user.id);
+                  return (
+                    <div
+                      key={user.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-surface transition-colors",
+                        isSelected && "bg-primary-light"
+                      )}
+                      onClick={() => setSelectedUser(user)}
                     >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
+                      <Avatar
+                        src={user.avatar}
+                        name={user.name}
+                        size="md"
+                        online={user.isOnline}
                       />
-                    </svg>
-                  </div>
-                )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-primary truncate">
+                          {user.name}
+                        </h3>
+                        {user.phone && (
+                          <p className="text-sm text-secondary truncate">
+                            {user.phone}
+                          </p>
+                        )}
+                        {user.email && (
+                          <p className="text-xs text-tertiary truncate">
+                            {user.email}
+                          </p>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                          <svg
+                            className="w-3 h-3 text-inverse"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  );
+              })}
               </div>
-            ))}
-          </div>
-        ) : phoneNumber && !isSearching ? (
-          <div className="text-center py-8 text-secondary">
-            <p>Enter a phone number and click search to find users</p>
-          </div>
-        ) : null}
+            )}
+            {searchResults.length === 0 && phoneNumber && !isSearching && (
+              <div className="text-center py-8 text-secondary">
+                <p>Enter a phone number and click search to find users</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Create Chat Button */}
