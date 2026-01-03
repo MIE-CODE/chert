@@ -14,6 +14,8 @@ import { useUserStore } from "./store";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useToast } from "./components/ui/toast";
+import { websocketService } from "./services/api";
+import { MessageService } from "./services/message-service";
 
 function HomeContent() {
   const {
@@ -24,6 +26,7 @@ function HomeContent() {
     loadChats,
     chats,
     isLoadingChats,
+    addChat,
   } = useChatStore();
   const { uiState, setShowNewGroup, setShowNewChat } = useUIStore();
   const { isAuthenticated } = useAuthContext();
@@ -63,6 +66,34 @@ function HomeContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, userIsAuthenticated, isLoadingChats, chats.length]);
+
+  // Listen for new chat notifications from WebSocket
+  useEffect(() => {
+    if (!isAuthenticated && !userIsAuthenticated) return;
+
+    const handleNewChat = (data: { 
+      chatId: string; 
+      message: any; 
+      sender: { id: string; username: string; avatar?: string } 
+    }) => {
+      console.log("New chat notification received:", data);
+      
+      // Reload chats to get the new chat with full details
+      loadChats().then(() => {
+        toast.info(`New chat started with ${data.sender.username}`);
+        // Optionally select the new chat
+        // selectChat(data.chatId);
+      }).catch((error) => {
+        console.error("Failed to reload chats after new chat notification:", error);
+      });
+    };
+
+    websocketService.on("new_chat", handleNewChat);
+
+    return () => {
+      websocketService.off("new_chat", handleNewChat);
+    };
+  }, [isAuthenticated, userIsAuthenticated, loadChats, toast]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

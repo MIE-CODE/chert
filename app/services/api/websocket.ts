@@ -28,7 +28,8 @@ export interface SocketEvents {
 
   // Server → Client
   connect: () => void;
-  disconnect: () => void;
+  disconnect: (reason: string) => void;
+  connect_error: (error: { message: string }) => void;
   joined_chat: (data: { chatId: string }) => void;
   left_chat: (data: { chatId: string }) => void;
   new_message: (data: { message: Message }) => void;
@@ -44,6 +45,7 @@ export interface SocketEvents {
     status: string;
     chatId?: string;
   }) => void;
+  new_chat: (data: { chatId: string; message: Message; sender: { id: string; username: string; avatar?: string } }) => void;
   error: (data: { message: string }) => void;
 }
 
@@ -53,30 +55,53 @@ class WebSocketService {
 
   /**
    * Connect to WebSocket server
+   * According to backend guide, server automatically joins user to all their chat rooms on connect
    */
   connect(token: string): void {
     if (this.socket?.connected) {
+      console.log("WebSocket already connected");
       return;
+    }
+
+    // Disconnect existing socket if any
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
 
     this.socket = io(SOCKET_URL, {
       auth: {
-        token,
+        token, // Pass token in auth object as per backend guide
       },
-      transports: ["websocket", "polling"],
+      transports: ["websocket", "polling"], // Allow both transports
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity, // Keep trying to reconnect
     });
 
     this.socket.on("connect", () => {
       this.isConnected = true;
-      console.log("WebSocket connected");
+      console.log("✅ WebSocket connected");
+      console.log("Socket ID:", this.socket?.id);
+      // Server automatically joins user to all their chat rooms on connect
     });
 
-    this.socket.on("disconnect", () => {
+    this.socket.on("disconnect", (reason: string) => {
       this.isConnected = false;
-      console.log("WebSocket disconnected");
+      console.log("WebSocket disconnected:", reason);
+      // Will automatically reconnect if reconnection is enabled
     });
 
-    this.socket.on("error", (error) => {
+    this.socket.on("connect_error", (error: { message: string }) => {
+      console.error("❌ WebSocket connection error:", error.message);
+      // Common errors:
+      // - "Authentication error: No token provided" - Token missing
+      // - "Authentication error: Invalid token" - Token expired or invalid
+      this.isConnected = false;
+    });
+
+    this.socket.on("error", (error: { message: string }) => {
       console.error("WebSocket error:", error);
     });
   }

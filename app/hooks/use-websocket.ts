@@ -11,19 +11,21 @@ import { apiClient } from "@/app/lib/api-client";
 export function useWebSocket() {
   const { currentUser } = useUserStore();
 
-  // Connect WebSocket when user is authenticated
+  // Connect WebSocket when we have a token (don't wait for currentUser to be loaded)
   useEffect(() => {
     const token = typeof window !== "undefined" 
       ? localStorage.getItem("auth_token") 
       : null;
 
-    if (token && currentUser && !websocketService.connected) {
-      console.log("Connecting WebSocket...");
+    // Connect if we have a token and aren't already connected
+    if (token && !websocketService.connected) {
+      console.log("Connecting WebSocket with token...");
       websocketService.connect(token);
     }
 
     return () => {
-      if (!currentUser) {
+      // Only disconnect if user explicitly logs out (currentUser becomes null)
+      if (!currentUser && token) {
         console.log("Disconnecting WebSocket (user logged out)");
         websocketService.disconnect();
       }
@@ -33,11 +35,20 @@ export function useWebSocket() {
   // Handle connection events
   useEffect(() => {
     const handleConnect = () => {
-      console.log("WebSocket connected");
+      console.log("✅ WebSocket connected - User automatically joined to all chat rooms");
     };
 
-    const handleDisconnect = () => {
-      console.log("WebSocket disconnected");
+    const handleDisconnect = (reason: string) => {
+      console.log("WebSocket disconnected:", reason);
+    };
+
+    const handleConnectError = (error: { message: string }) => {
+      console.error("❌ WebSocket connection error:", error.message);
+      // Handle authentication errors
+      if (error.message.includes("Authentication")) {
+        // Token expired or invalid - could redirect to login or refresh token
+        console.warn("Authentication error - token may be expired or invalid");
+      }
     };
 
     const handleError = (error: { message: string }) => {
@@ -46,11 +57,13 @@ export function useWebSocket() {
 
     websocketService.on("connect", handleConnect);
     websocketService.on("disconnect", handleDisconnect);
+    websocketService.on("connect_error", handleConnectError);
     websocketService.on("error", handleError);
 
     return () => {
       websocketService.off("connect", handleConnect);
       websocketService.off("disconnect", handleDisconnect);
+      websocketService.off("connect_error", handleConnectError);
       websocketService.off("error", handleError);
     };
   }, []);
