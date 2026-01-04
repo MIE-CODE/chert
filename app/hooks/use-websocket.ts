@@ -56,7 +56,7 @@ export function useWebSocket() {
       console.error("WebSocket error:", error.message);
     };
 
-    // Global listener for new_message events (for testing)
+    // Global listener for new_message events to update unread counts
     const handleNewMessage = (data: { message: any }) => {
       console.log("📨 [GLOBAL] New message received via WebSocket:", data.message);
       console.log("📨 [GLOBAL] Message details:", {
@@ -65,6 +65,10 @@ export function useWebSocket() {
         senderId: data.message?.senderId || data.message?.sender?._id || data.message?.sender?.id,
         content: data.message?.content || data.message?.text,
       });
+      
+      // Update unread count for chats that are not currently open
+      // This is handled by the addMessage reducer in chatSlice, which checks selectedChatId
+      // The useMessages hook will handle adding the message to the current chat if it's open
     };
 
     websocketService.on("connect", handleConnect);

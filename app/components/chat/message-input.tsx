@@ -14,22 +14,34 @@ import { useToast } from "@/app/components/ui/toast";
 
 interface MessageInputProps {
   onSend: (message: string) => void;
+  onSendAudio?: (audioBlob: Blob, duration: number) => void;
   placeholder?: string;
 }
 
 export function MessageInput({
   onSend,
+  onSendAudio,
   placeholder = "Type a message...",
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
+  
+  const handleRecordingComplete = (result: { audioBlob: Blob; duration: number }) => {
+    if (onSendAudio && result.audioBlob.size > 0) {
+      onSendAudio(result.audioBlob, result.duration);
+    } else {
+      toast.error("Recording failed or was too short");
+    }
+  };
+
   const {
     isRecording,
     isContinuousRecording,
     handleRecordStart,
     handleRecordEnd,
-  } = useRecording();
+    getFormattedDuration,
+  } = useRecording(handleRecordingComplete);
 
   const handleAttach = () => {
     toast.info("File attachment feature coming soon");
@@ -113,27 +125,33 @@ export function MessageInput({
             <SendIcon />
           </IconButton>
         ) : (
-          <IconButton
-            variant={isRecording ? "danger" : "ghost"}
-            size="md"
-            onMouseDown={!isContinuousRecording ? handleRecordStart : undefined}
-            onMouseUp={!isContinuousRecording ? handleRecordEnd : undefined}
-            onMouseLeave={!isContinuousRecording ? handleRecordEnd : undefined}
-            onTouchStart={!isContinuousRecording ? handleRecordStart : undefined}
-            onTouchEnd={!isContinuousRecording ? handleRecordEnd : undefined}
-            onClick={isContinuousRecording ? handleRecordStart : undefined}
-            title={
-              isContinuousRecording
-                ? "Click to stop recording"
-                : isRecording
-                ? "Hold for 10s for continuous recording"
-                : "Hold to record"
-            }
-            className="flex-shrink-0"
-          >
-           {!isRecording ? <MicIcon />:
-            <FiMicOff/>}
-          </IconButton>
+          <div className="relative flex-shrink-0">
+            <IconButton
+              variant={isRecording ? "danger" : "ghost"}
+              size="md"
+              onMouseDown={!isContinuousRecording ? handleRecordStart : undefined}
+              onMouseUp={!isContinuousRecording ? handleRecordEnd : undefined}
+              onMouseLeave={!isContinuousRecording ? handleRecordEnd : undefined}
+              onTouchStart={!isContinuousRecording ? handleRecordStart : undefined}
+              onTouchEnd={!isContinuousRecording ? handleRecordEnd : undefined}
+              onClick={isContinuousRecording ? handleRecordStart : undefined}
+              title={
+                isContinuousRecording
+                  ? "Click to stop recording"
+                  : isRecording
+                  ? `Recording... ${getFormattedDuration()}`
+                  : "Hold to record"
+              }
+              className="flex-shrink-0"
+            >
+              {!isRecording ? <MicIcon /> : <FiMicOff />}
+            </IconButton>
+            {isRecording && (
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-error text-inverse text-xs px-2 py-1 rounded whitespace-nowrap">
+                {getFormattedDuration()}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

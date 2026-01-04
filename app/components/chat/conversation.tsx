@@ -11,10 +11,12 @@ import {
 } from "@/app/components/ui/icons";
 import { MessageBubble } from "./message-bubble";
 import { MessageInput } from "./message-input";
+import { ChatInfoModal } from "./chat-info-modal";
 import { cn } from "@/app/lib/utils";
 import { useMessages, useDragDrop } from "@/app/hooks";
-import { useUserStore } from "@/app/store";
+import { useUserStore, useChatStore } from "@/app/store";
 import { useToast } from "@/app/components/ui/toast";
+import { MessageService } from "@/app/services/message-service";
 
 interface ConversationProps {
   chatId: string;
@@ -34,7 +36,12 @@ export function Conversation({
   onChatDrop,
 }: ConversationProps & { onChatDrop?: (chat: any) => void }) {
   const { currentUser } = useUserStore();
+  const { getSelectedChat, addMessage: addMessageToStore } = useChatStore();
   const toast = useToast();
+  const [showChatInfo, setShowChatInfo] = useState(false);
+  
+  // Get full chat data from store
+  const chat = getSelectedChat();
   
   // Try to get user ID from currentUser, or fallback to token payload
   const getCurrentUserId = (): string => {
@@ -72,7 +79,7 @@ export function Conversation({
       console.warn("⚠️ Current user is null! Messages may not align correctly.");
     }
   }
-  const { messages, messagesEndRef, sendMessage, shouldShowDate, shouldShowAvatar } =
+  const { messages, messagesEndRef, sendMessage, shouldShowDate, shouldShowAvatar, setLocalMessages } =
     useMessages({ chatId, currentUserId });
   const { isDragOver, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(
     (data) => {
@@ -91,7 +98,7 @@ export function Conversation({
   };
 
   const handleMoreOptions = () => {
-    toast.info("More options coming soon");
+    setShowChatInfo(true);
   };
 
   return (
@@ -170,7 +177,73 @@ export function Conversation({
       </div>
 
       {/* Input */}
-      <MessageInput onSend={sendMessage} />
+      <MessageInput 
+        onSend={sendMessage}
+        onSendAudio={async (audioBlob, duration) => {
+          try {
+            // Create a temporary message to show in UI
+            const tempMessage = MessageService.createMessage(
+              `🎤 Voice message (${Math.round(duration)}s)`,
+              currentUserId,
+              "Me"
+            );
+            
+            // Add to local state
+            setLocalMessages((prev) => [...prev, tempMessage]);
+            addMessageToStore(chatId, tempMessage, true);
+            
+            // Create FormData for file upload
+            const formData = new FormData();
+            formData.append("file", audioBlob, `voice-${Date.now()}.webm`);
+            formData.append("chatId", chatId);
+            formData.append("type", "audio");
+            
+            // Upload audio file and send message
+            const { filesAPI, messagesAPI } = await import("@/app/services/api");
+            const fileResponse = await filesAPI.uploadFile(formData);
+            
+            // Send message with audio file URL
+            const message = await messagesAPI.sendMessage({
+              chatId,
+              content: `Voice message (${Math.round(duration)}s)`,
+              type: "audio",
+              fileUrl: fileResponse.url || fileResponse.fileUrl,
+              fileName: `voice-${Date.now()}.webm`,
+              fileSize: audioBlob.size,
+            });
+            
+            // Replace temp message with server response
+            const normalizedMessage = MessageService.normalizeMessage(message);
+            setLocalMessages((prev) => {
+              const tempIndex = prev.findIndex((msg) => msg.id === tempMessage.id);
+              if (tempIndex !== -1) {
+                const updated = [...prev];
+                updated[tempIndex] = normalizedMessage;
+                return updated;
+              }
+              return [...prev, normalizedMessage];
+            });
+            addMessageToStore(chatId, normalizedMessage, true);
+          } catch (error: any) {
+            console.error("Failed to send audio message:", error);
+            toast.error(error.message || "Failed to send voice message");
+            // Remove temp message on error
+            setLocalMessages((prev) => prev.filter((msg) => msg.id !== tempMessage.id));
+          }
+        }}
+      />
+
+      {/* Chat Info Modal */}
+      {chat && (
+        <ChatInfoModal
+          chat={chat}
+          currentUser={currentUser}
+          isOpen={showChatInfo}
+          onClose={() => setShowChatInfo(false)}
+          onVoiceCall={handleVoiceCall}
+          onVideoCall={handleVideoCall}
+        />
+      )}
     </div>
   );
 }

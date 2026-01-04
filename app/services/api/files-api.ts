@@ -6,10 +6,11 @@
 import { apiClient } from "@/app/lib/api-client";
 
 export interface UploadResponse {
-  fileUrl: string;
+  fileUrl?: string;
+  url?: string;
   fileName: string;
   fileSize: number;
-  fileType: "image" | "file";
+  fileType?: "image" | "file" | "audio";
   mimeType: string;
 }
 
@@ -25,9 +26,15 @@ class FilesAPI {
   /**
    * Upload a file or image
    */
-  async uploadFile(file: File): Promise<UploadResponse> {
-    const formData = new FormData();
-    formData.append("file", file);
+  async uploadFile(file: File | FormData): Promise<UploadResponse> {
+    let formData: FormData;
+    
+    if (file instanceof FormData) {
+      formData = file;
+    } else {
+      formData = new FormData();
+      formData.append("file", file);
+    }
 
     const response = await apiClient.axiosInstance.post<
       ApiResponse<UploadResponse>

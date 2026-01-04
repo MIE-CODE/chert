@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Avatar } from "@/app/components/ui/avatar";
 import { Badge } from "@/app/components/ui/badge";
 import {
@@ -39,10 +39,36 @@ interface ChatListProps {
 export function ChatList(
   { selectedChatId, onChatSelect, onNewGroup, onNewChat }: ChatListProps = {} as ChatListProps
 ) {
-  const { chats, searchQuery, setSearchQuery, isLoadingChats, blockChat, muteChat, pinChat, archiveChat } = useChatStore();
+  const { 
+    chats, 
+    searchQuery, 
+    setSearchQuery, 
+    isLoadingChats, 
+    isLoadingMoreChats,
+    hasMoreChats,
+    loadMoreChats,
+    blockChat, 
+    muteChat, 
+    pinChat, 
+    archiveChat,
+    deleteChat,
+    deleteMessage,
+    markAsRead,
+    updateChat,
+    getChatMessages,
+  } = useChatStore();
   const { setShowSettings } = useUIStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [actionsModalChat, setActionsModalChat] = useState<Chat | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isLoadingMoreRef = useRef(false);
+  
+  // Get selected chat ID from URL if on chat route
+  const chatIdFromUrl = pathname?.startsWith("/chat/") 
+    ? pathname.split("/chat/")[1]?.split("/")[0] 
+    : null;
+  const effectiveSelectedChatId = chatIdFromUrl || selectedChatId;
 
   // Debug: Log chats to see if they're being received
   console.log("ChatList - chats:", chats);
@@ -53,14 +79,48 @@ export function ChatList(
   const safeChats = Array.isArray(chats) ? chats : [];
   const safeSearchQuery = searchQuery || "";
   
-  const pinnedChats = safeChats.filter((chat) => chat?.isPinned && !chat?.isArchived);
-  const regularChats = safeChats.filter((chat) => !chat?.isPinned && !chat?.isArchived);
+  // Remove duplicates by ID (keep the first occurrence)
+  const uniqueChats = safeChats.reduce((acc, chat) => {
+    if (!acc.find((c) => c.id === chat.id)) {
+      acc.push(chat);
+    }
+    return acc;
+  }, [] as Chat[]);
+
+  const pinnedChats = uniqueChats.filter((chat) => chat?.isPinned && !chat?.isArchived);
+  const regularChats = uniqueChats.filter((chat) => !chat?.isPinned && !chat?.isArchived);
 
   const filteredChats = regularChats.filter(
     (chat) =>
       chat?.name?.toLowerCase().includes(safeSearchQuery.toLowerCase()) ||
       chat?.lastMessage?.toLowerCase().includes(safeSearchQuery.toLowerCase())
   );
+
+  // Infinite scroll handler - load more chats when scrolling to top
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    // Load more when scrolled to top (within 100px)
+    if (container.scrollTop < 100 && hasMoreChats && !isLoadingMoreChats && !isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = true;
+      loadMoreChats().finally(() => {
+        isLoadingMoreRef.current = false;
+      });
+    }
+  }, [hasMoreChats, isLoadingMoreChats, loadMoreChats]);
+
+  // Handle chat click - navigate to chat route
+  const handleChatClick = useCallback((chat: Chat) => {
+    router.push(`/chat/${chat.id}`);
+    // Also call onChatSelect for backward compatibility
+    onChatSelect?.({
+      id: chat.id,
+      name: chat.name,
+      avatar: chat.avatar,
+      isOnline: chat.isOnline,
+      type: chat.type || "individual",
+      members: chat.members,
+    });
+  }, [router, onChatSelect]);
 
   return (
     <div className="flex flex-col h-screen bg-background w-full overflow-hidden">
@@ -100,7 +160,11 @@ export function ChatList(
       </div>
 
       {/* Chat List */}
-      <div className="flex-1 overflow-y-auto">
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={handleScroll}
+      >
         {isLoadingChats ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -121,17 +185,8 @@ export function ChatList(
                   <ChatItem
                     key={chat.id}
                     chat={chat}
-                    isSelected={selectedChatId === chat.id}
-                    onClick={() =>
-                      onChatSelect?.({
-                        id: chat.id,
-                        name: chat.name,
-                        avatar: chat.avatar,
-                        isOnline: chat.isOnline,
-                        type: chat.type || "individual",
-                        members: chat.members,
-                      })
-                    }
+                    isSelected={effectiveSelectedChatId === chat.id}
+                    onClick={() => handleChatClick(chat)}
                     onActionsClick={() => setActionsModalChat(chat)}
                   />
                 ))}
@@ -146,24 +201,23 @@ export function ChatList(
                 </div>
               )}
               {filteredChats.length > 0 ? (
-                filteredChats.map((chat) => (
-                  <ChatItem
-                    key={chat.id}
-                    chat={chat}
-                    isSelected={selectedChatId === chat.id}
-                    onClick={() =>
-                      onChatSelect?.({
-                        id: chat.id,
-                        name: chat.name,
-                        avatar: chat.avatar,
-                        isOnline: chat.isOnline,
-                        type: chat.type || "individual",
-                        members: chat.members,
-                      })
-                    }
-                    onActionsClick={() => setActionsModalChat(chat)}
-                  />
-                ))
+                <>
+                  {filteredChats.map((chat) => (
+                    <ChatItem
+                      key={chat.id}
+                      chat={chat}
+                      isSelected={effectiveSelectedChatId === chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      onActionsClick={() => setActionsModalChat(chat)}
+                    />
+                  ))}
+                  {/* Loading indicator for infinite scroll */}
+                  {isLoadingMoreChats && (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-primary border-r-transparent"></div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-8 text-secondary">
                   <p>No chats found</p>
@@ -183,6 +237,69 @@ export function ChatList(
         onMute={muteChat}
         onPin={pinChat}
         onArchive={archiveChat}
+        onDelete={deleteChat}
+        onClearChat={(chatId) => {
+          // Clear all messages for this chat
+          const messages = getChatMessages(chatId);
+          if (messages && messages.length > 0) {
+            messages.forEach((msg) => {
+              deleteMessage(chatId, msg.id);
+            });
+          }
+        }}
+        onMarkAsRead={(chatId) => {
+          const messages = getChatMessages(chatId);
+          if (messages && messages.length > 0) {
+            const messageIds = messages.map((msg) => msg.id);
+            markAsRead(chatId, messageIds);
+            // Also reset unread count
+            const chat = chats.find((c) => c.id === chatId);
+            if (chat) {
+              updateChat(chatId, { unreadCount: 0 });
+            }
+          }
+        }}
+        onMarkAsUnread={(chatId) => {
+          const chat = chats.find((c) => c.id === chatId);
+          if (chat) {
+            updateChat(chatId, { unreadCount: 1 });
+          }
+        }}
+        onViewInfo={(chatId) => {
+          // Navigate to chat info/profile page
+          const chat = chats.find((c) => c.id === chatId);
+          if (chat) {
+            router.push(`/chat/${chatId}/info`);
+          }
+        }}
+        onSearch={(chatId) => {
+          // Navigate to chat with search enabled
+          router.push(`/chat/${chatId}?search=true`);
+        }}
+        onExport={(chatId) => {
+          // Export chat functionality
+          const messages = getChatMessages(chatId);
+          const chat = chats.find((c) => c.id === chatId);
+          if (messages && chat) {
+            const exportData = {
+              chatName: chat.name,
+              messages: messages.map((msg) => ({
+                sender: msg.senderName,
+                text: msg.text || msg.content,
+                timestamp: msg.timestamp,
+              })),
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${chat.name}-chat-export.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }
+        }}
       />
     </div>
   );

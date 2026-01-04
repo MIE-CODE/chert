@@ -13,6 +13,9 @@ import {
   selectSelectedChat,
   selectChatMessages,
   selectUnreadCount,
+  selectIsLoadingMoreChats,
+  selectHasMoreChats,
+  selectCurrentPage,
 } from "./redux/chatSlice";
 import {
   selectCurrentUser,
@@ -39,6 +42,7 @@ import {
   markAsRead,
   setTyping,
   loadChats,
+  loadMoreChats,
 } from "./redux/chatSlice";
 import {
   setCurrentUser,
@@ -158,6 +162,9 @@ export function useChatStore() {
   const messages = useAppSelector(selectMessages);
   const searchQuery = useAppSelector(selectSearchQuery);
   const isLoadingChats = useAppSelector(selectIsLoadingChats);
+  const isLoadingMoreChats = useAppSelector(selectIsLoadingMoreChats);
+  const hasMoreChats = useAppSelector(selectHasMoreChats);
+  const currentPage = useAppSelector(selectCurrentPage);
   const selectedChat = useAppSelector(selectSelectedChat);
   const unreadCount = useAppSelector(selectUnreadCount);
   
@@ -197,6 +204,9 @@ export function useChatStore() {
     messages,
     searchQuery,
     isLoadingChats,
+    isLoadingMoreChats,
+    hasMoreChats,
+    currentPage,
     setChats: (chats: any) => dispatch(setChats(chats)),
     addChat: (chat: any) => dispatch(addChat(chat)),
     updateChat: (chatId: string, updates: any) => dispatch(updateChat({ chatId, updates })),
@@ -207,7 +217,7 @@ export function useChatStore() {
     muteChat: (chatId: string, muted: boolean) => dispatch(muteChat({ chatId, muted })),
     pinChat: (chatId: string, pinned: boolean) => dispatch(pinChat({ chatId, pinned })),
     archiveChat: (chatId: string) => dispatch(archiveChat(chatId)),
-    addMessage: (chatId: string, message: any) => dispatch(addMessage({ chatId, message })),
+    addMessage: (chatId: string, message: any, isCurrentUser?: boolean) => dispatch(addMessage({ chatId, message, isCurrentUser })),
     updateMessage: (chatId: string, messageId: string, updates: any) =>
       dispatch(updateMessage({ chatId, messageId, updates })),
     deleteMessage: (chatId: string, messageId: string) =>
@@ -219,6 +229,7 @@ export function useChatStore() {
     getChatMessages,
     getUnreadCount,
     loadChats: useCallback(() => dispatch(loadChats()), [dispatch]),
+    loadMoreChats: useCallback(() => dispatch(loadMoreChats()), [dispatch]),
   };
 }
 

@@ -9,7 +9,7 @@ import { Message } from "@/app/store/types";
 export interface SendMessageRequest {
   chatId: string;
   content?: string;
-  type: "text" | "image" | "file";
+  type: "text" | "image" | "file" | "audio";
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;

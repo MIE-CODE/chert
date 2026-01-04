@@ -11,7 +11,7 @@ import { useChatStore, useUIStore } from "./store";
 import { cn } from "./lib/utils";
 import { useAuthContext } from "./components/auth/auth-provider";
 import { useUserStore } from "./store";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useToast } from "./components/ui/toast";
 import { websocketService } from "./services/api";
@@ -30,11 +30,16 @@ function HomeContent() {
   } = useChatStore();
   const { uiState, setShowNewGroup, setShowNewChat } = useUIStore();
   const { isAuthenticated } = useAuthContext();
-  const { isAuthenticated: userIsAuthenticated } = useUserStore();
+  const { isAuthenticated: userIsAuthenticated, currentUser } = useUserStore();
   const toast = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const selectedChat = getSelectedChat();
   const hasLoadedChats = useRef(false);
+  
+  // If we're on a chat route, don't show the conversation here (it's handled by the route)
+  const isOnChatRoute = pathname?.startsWith("/chat/");
 
   // Load chats when authenticated (only once, and only if not already loading/loaded)
   useEffect(() => {
@@ -71,21 +76,34 @@ function HomeContent() {
   useEffect(() => {
     if (!isAuthenticated && !userIsAuthenticated) return;
 
-    const handleNewChat = (data: { 
+    const handleNewChat = async (data: { 
       chatId: string; 
       message: any; 
       sender: { id: string; username: string; avatar?: string } 
     }) => {
       console.log("New chat notification received:", data);
       
-      // Reload chats to get the new chat with full details
-      loadChats().then(() => {
+      try {
+        // Fetch the new chat by ID to get full details
+        const { chatsAPI } = await import("@/app/services/api");
+        const { normalizeChat } = await import("@/app/store/redux/chatSlice");
+        
+        const apiChat = await chatsAPI.getChatById(data.chatId);
+        
+        // Normalize and add the chat with unread count
+        // Use currentUser from component scope
+        const normalizedChat = normalizeChat(apiChat, currentUser?.id || null);
+        normalizedChat.unreadCount = 1; // New chats are unread by default
+        
+        addChat(normalizedChat);
         toast.info(`New chat started with ${data.sender.username}`);
-        // Optionally select the new chat
-        // selectChat(data.chatId);
-      }).catch((error) => {
-        console.error("Failed to reload chats after new chat notification:", error);
-      });
+      } catch (error) {
+        console.error("Failed to fetch new chat:", error);
+        // Fallback: reload all chats
+        loadChats().catch((err) => {
+          console.error("Failed to reload chats after new chat notification:", err);
+        });
+      }
     };
 
     websocketService.on("new_chat", handleNewChat);
@@ -93,7 +111,7 @@ function HomeContent() {
     return () => {
       websocketService.off("new_chat", handleNewChat);
     };
-  }, [isAuthenticated, userIsAuthenticated, loadChats, toast]);
+  }, [isAuthenticated, userIsAuthenticated, loadChats, addChat, toast, currentUser]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -106,6 +124,8 @@ function HomeContent() {
         <ChatList
           selectedChatId={selectedChatId}
           onChatSelect={(chat) => {
+            // Navigation is handled in ChatList component via router.push
+            // This is kept for backward compatibility
             selectChat(chat.id);
           }}
           onNewChat={() => setShowNewChat(true)}
@@ -120,7 +140,7 @@ function HomeContent() {
             onBack={() => setShowNewChat(false)}
             onChatCreated={(chatId) => {
               setShowNewChat(false);
-              selectChat(chatId);
+              router.push(`/chat/${chatId}`);
             }}
           />
         </div>
@@ -136,7 +156,8 @@ function HomeContent() {
             }}
           />
         </div>
-      ) : selectedChat ? (
+      ) : !isOnChatRoute && selectedChat ? (
+        // Only show conversation here if not on a chat route (for backward compatibility)
         <div className="flex-1 flex min-w-0 w-full md:w-auto">
           {selectedChat.type === "group" ? (
             <GroupChat
@@ -144,8 +165,11 @@ function HomeContent() {
               groupName={selectedChat.name}
               groupAvatar={selectedChat.avatar}
               members={selectedChat.members || []}
-              onBack={() => selectChat(null)}
-              onChatDrop={(chat) => selectChat(chat.id)}
+              onBack={() => {
+                selectChat(null);
+                router.push("/");
+              }}
+              onChatDrop={(chat) => router.push(`/chat/${chat.id}`)}
             />
           ) : (
             <Conversation
@@ -153,14 +177,17 @@ function HomeContent() {
               chatName={selectedChat.name}
               chatAvatar={selectedChat.avatar}
               isOnline={selectedChat.isOnline}
-              onBack={() => selectChat(null)}
-              onChatDrop={(chat) => selectChat(chat.id)}
+              onBack={() => {
+                selectChat(null);
+                router.push("/");
+              }}
+              onChatDrop={(chat) => router.push(`/chat/${chat.id}`)}
             />
           )}
         </div>
-      ) : (
-        <DropZone onChatDrop={(chat) => selectChat(chat.id)} />
-      )}
+      ) : !isOnChatRoute ? (
+        <DropZone onChatDrop={(chat) => router.push(`/chat/${chat.id}`)} />
+      ) : null}
     </div>
   );
 }

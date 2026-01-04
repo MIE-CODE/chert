@@ -63,32 +63,51 @@ class ChatsAPI {
   }
 
   /**
-   * Get all user's chats
+   * Get all user's chats with pagination
    */
-  async getChats(): Promise<any[]> {
+  async getChats(params?: { page?: number; limit?: number }): Promise<{ chats: any[]; hasMore: boolean; total?: number }> {
     try {
       const response = await apiClient.axiosInstance.get<
-        ApiResponse<{ chats?: any[] } | any[]>
-      >(this.basePath);
+        ApiResponse<{ chats?: any[] } | any[] | { chats: any[]; pagination?: any }>
+      >(this.basePath, {
+        params: {
+          page: params?.page || 1,
+          limit: params?.limit || 20,
+        },
+      });
 
       if (response.data.success && response.data.data) {
-        // Handle both response formats:
-        // 1. { data: { chats: [...] } } - nested format
-        // 2. { data: [...] } - direct array format
         const data = response.data.data;
         
-        if (Array.isArray(data)) {
-          // Direct array format
-          return data;
-        } else if (data && typeof data === "object" && "chats" in data) {
-          // Nested format with chats property
-          const chats = (data as { chats?: any[] }).chats;
-          return Array.isArray(chats) ? chats : [];
-        } else {
-          // Fallback: try to extract any array from data
-          console.warn("Unexpected API response format:", data);
-          return [];
+        // Handle paginated response format
+        if (data && typeof data === "object" && "chats" in data && "pagination" in data) {
+          const paginatedData = data as { chats: any[]; pagination: { hasMore?: boolean; total?: number } };
+          return {
+            chats: Array.isArray(paginatedData.chats) ? paginatedData.chats : [],
+            hasMore: paginatedData.pagination?.hasMore ?? true,
+            total: paginatedData.pagination?.total,
+          };
         }
+        
+        // Handle array format (backward compatibility)
+        if (Array.isArray(data)) {
+          return {
+            chats: data,
+            hasMore: data.length >= (params?.limit || 20),
+          };
+        }
+        
+        // Handle nested format with chats property
+        if (data && typeof data === "object" && "chats" in data) {
+          const chats = (data as { chats?: any[] }).chats;
+          return {
+            chats: Array.isArray(chats) ? chats : [],
+            hasMore: Array.isArray(chats) && chats.length >= (params?.limit || 20),
+          };
+        }
+        
+        console.warn("Unexpected API response format:", data);
+        return { chats: [], hasMore: false };
       }
 
       throw new Error(response.data.message || "Failed to get chats");
@@ -106,15 +125,29 @@ class ChatsAPI {
    * Get chat by ID
    */
   async getChatById(chatId: string): Promise<Chat> {
-    const response = await apiClient.axiosInstance.get<
-      ApiResponse<{ chat: Chat }>
-    >(`${this.basePath}/${chatId}`);
+    try {
+      const response = await apiClient.axiosInstance.get<
+        ApiResponse<{ chat: Chat } | Chat>
+      >(`${this.basePath}/${chatId}`);
 
-    if (response.data.success && response.data.data) {
-      return response.data.data.chat;
+      if (response.data.success && response.data.data) {
+        // Handle both { chat: Chat } and direct Chat formats
+        const data = response.data.data;
+        if (data && typeof data === "object" && "chat" in data) {
+          return (data as { chat: Chat }).chat;
+        }
+        return data as Chat;
+      }
+
+      throw new Error(response.data.message || "Failed to get chat");
+    } catch (error: any) {
+      // Preserve timeout and network error flags
+      if (error?.isTimeout || error?.isNetworkError) {
+        error.isTimeout = error.isTimeout || error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+        error.isNetworkError = error.isNetworkError || error.code === 'ERR_NETWORK';
+      }
+      throw error;
     }
-
-    throw new Error(response.data.message || "Failed to get chat");
   }
 
   /**

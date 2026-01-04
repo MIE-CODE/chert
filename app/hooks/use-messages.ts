@@ -270,7 +270,8 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         return [...prev, tempMessage];
       });
       // Also add to store immediately for instant feedback
-      addMessageToStore(chatId, tempMessage);
+      // This is the current user's message, so mark as such
+      addMessageToStore(chatId, tempMessage, true);
 
       try {
         // Check if authenticated before sending
@@ -398,5 +399,6 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     shouldShowDate,
     shouldShowAvatar,
     isLoading,
+    setLocalMessages,
   };
 }

@@ -9,6 +9,9 @@ interface ChatState {
   messages: Record<string, Message[]>; // chatId -> messages
   searchQuery: string;
   isLoadingChats: boolean;
+  isLoadingMoreChats: boolean;
+  hasMoreChats: boolean;
+  currentPage: number;
 }
 
 const initialState: ChatState = {
@@ -17,10 +20,13 @@ const initialState: ChatState = {
   messages: {},
   searchQuery: "",
   isLoadingChats: false,
+  isLoadingMoreChats: false,
+  hasMoreChats: true,
+  currentPage: 1,
 };
 
 // Normalize chat data from API to match Chat interface
-const normalizeChat = (apiChat: any, currentUserId: string | null = null): Chat => {
+export const normalizeChat = (apiChat: any, currentUserId: string | null = null): Chat => {
 
   // Format timestamp for display
   const formatTimestamp = (date: string | Date | undefined): string => {
@@ -161,21 +167,22 @@ const normalizeChat = (apiChat: any, currentUserId: string | null = null): Chat 
   };
 };
 
-// Async thunk to load chats
+// Async thunk to load chats (initial load)
 export const loadChats = createAsyncThunk(
   "chat/loadChats",
   async (_, { rejectWithValue, getState }) => {
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
       if (!token) {
-        return [];
+        return { chats: [], hasMore: false };
       }
 
-      const apiChats = await chatsAPI.getChats();
-      const safeApiChats = Array.isArray(apiChats) ? apiChats : [];
+      const response = await chatsAPI.getChats({ page: 1, limit: 20 });
+      const safeApiChats = Array.isArray(response.chats) ? response.chats : [];
       
       console.log("Raw API chats:", safeApiChats);
       console.log("Number of chats from API:", safeApiChats.length);
+      console.log("Has more chats:", response.hasMore);
       
       // Get current user ID from Redux state for name derivation
       const state = getState() as RootState;
@@ -203,9 +210,51 @@ export const loadChats = createAsyncThunk(
 
       console.log(`Loaded ${normalizedChats.length} chats from ${safeApiChats.length} API chats`);
       console.log("Normalized chats:", normalizedChats);
-      return normalizedChats;
+      return { chats: normalizedChats, hasMore: response.hasMore };
     } catch (error: any) {
       return rejectWithValue(error?.message || "Failed to load chats");
+    }
+  }
+);
+
+// Async thunk to load more chats (pagination)
+export const loadMoreChats = createAsyncThunk(
+  "chat/loadMoreChats",
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      if (!token) {
+        return { chats: [], hasMore: false };
+      }
+
+      const state = getState() as RootState;
+      const currentPage = state.chat.currentPage;
+      const nextPage = currentPage + 1;
+
+      const response = await chatsAPI.getChats({ page: nextPage, limit: 20 });
+      const safeApiChats = Array.isArray(response.chats) ? response.chats : [];
+      
+      // Get current user ID from Redux state for name derivation
+      const currentUserId = state.user.currentUser?.id || null;
+      
+      const normalizedChats = safeApiChats
+        .map((chat) => {
+          try {
+            const normalized = normalizeChat(chat, currentUserId);
+            if (!normalized || !normalized.id) {
+              return null;
+            }
+            return normalized;
+          } catch (error) {
+            console.error("Error normalizing chat:", error, chat);
+            return null;
+          }
+        })
+        .filter((chat): chat is Chat => chat !== null);
+
+      return { chats: normalizedChats, hasMore: response.hasMore, page: nextPage };
+    } catch (error: any) {
+      return rejectWithValue(error?.message || "Failed to load more chats");
     }
   }
 );
@@ -218,7 +267,17 @@ const chatSlice = createSlice({
       state.chats = action.payload;
     },
     addChat: (state, action: PayloadAction<Chat>) => {
-      state.chats.push(action.payload);
+      // Check if chat already exists before adding
+      const exists = state.chats.some((chat) => chat.id === action.payload.id);
+      if (!exists) {
+        state.chats.push(action.payload);
+      } else {
+        // Update existing chat instead
+        const index = state.chats.findIndex((chat) => chat.id === action.payload.id);
+        if (index !== -1) {
+          state.chats[index] = action.payload;
+        }
+      }
     },
     updateChat: (state, action: PayloadAction<{ chatId: string; updates: Partial<Chat> }>) => {
       const index = state.chats.findIndex((chat) => chat.id === action.payload.chatId);
@@ -277,8 +336,8 @@ const chatSlice = createSlice({
         chat.isArchived = !chat.isArchived;
       }
     },
-    addMessage: (state, action: PayloadAction<{ chatId: string; message: Message }>) => {
-      const { chatId, message } = action.payload;
+    addMessage: (state, action: PayloadAction<{ chatId: string; message: Message; isCurrentUser?: boolean }>) => {
+      const { chatId, message, isCurrentUser = false } = action.payload;
       
       // Ensure timestamp is a valid ISO string for Redux serialization
       const normalizedMessage: Message = {
@@ -295,7 +354,7 @@ const chatSlice = createSlice({
       }
       state.messages[chatId].push(normalizedMessage);
       
-      // Update chat's last message
+      // Update chat's last message and unread count
       const chat = state.chats.find((c) => c.id === chatId);
       if (chat) {
         chat.lastMessage = normalizedMessage.text || normalizedMessage.content || "";
@@ -303,6 +362,18 @@ const chatSlice = createSlice({
           hour: "numeric",
           minute: "2-digit",
         });
+        
+        // Increment unread count if this chat is not currently selected
+        // Only count messages from other users (not the current user)
+        if (chatId !== state.selectedChatId && !isCurrentUser) {
+          chat.unreadCount = (chat.unreadCount || 0) + 1;
+        } else {
+          // If chat is selected or it's the current user's message, mark as read
+          normalizedMessage.isRead = true;
+        }
+      } else {
+        // Chat doesn't exist in list yet - this shouldn't happen, but handle gracefully
+        console.warn(`Chat ${chatId} not found in chat list when adding message`);
       }
     },
     updateMessage: (state, action: PayloadAction<{ chatId: string; messageId: string; updates: Partial<Message> }>) => {
@@ -354,14 +425,64 @@ const chatSlice = createSlice({
       .addCase(loadChats.pending, (state) => {
         state.isLoadingChats = true;
       })
-      .addCase(loadChats.fulfilled, (state, action) => {
-        state.isLoadingChats = false;
-        state.chats = action.payload;
-      })
+            .addCase(loadChats.fulfilled, (state, action) => {
+              state.isLoadingChats = false;
+              if (action.payload && typeof action.payload === "object" && "chats" in action.payload) {
+                // Remove duplicates by ID
+                const newChats = action.payload.chats;
+                const uniqueChats = newChats.reduce((acc: Chat[], chat: Chat) => {
+                  if (!acc.find((c) => c.id === chat.id)) {
+                    acc.push(chat);
+                  }
+                  return acc;
+                }, []);
+                state.chats = uniqueChats;
+                state.hasMoreChats = action.payload.hasMore;
+                state.currentPage = 1;
+              } else {
+                // Backward compatibility
+                const payload = Array.isArray(action.payload) ? action.payload : [];
+                // Remove duplicates
+                const uniqueChats = payload.reduce((acc: Chat[], chat: Chat) => {
+                  if (!acc.find((c) => c.id === chat.id)) {
+                    acc.push(chat);
+                  }
+                  return acc;
+                }, []);
+                state.chats = uniqueChats;
+              }
+            })
       .addCase(loadChats.rejected, (state) => {
         state.isLoadingChats = false;
         // Don't clear existing chats on error - keep what we have
-        // state.chats = [];
+      })
+      .addCase(loadMoreChats.pending, (state) => {
+        state.isLoadingMoreChats = true;
+      })
+            .addCase(loadMoreChats.fulfilled, (state, action) => {
+              state.isLoadingMoreChats = false;
+              if (action.payload && typeof action.payload === "object" && "chats" in action.payload) {
+                // Append new chats to existing ones (avoid duplicates)
+                const newChats = action.payload.chats.filter(
+                  (newChat) => !state.chats.some((existingChat) => existingChat.id === newChat.id)
+                );
+                // Combine and remove any duplicates that might have been introduced
+                const combinedChats = [...state.chats, ...newChats];
+                const uniqueChats = combinedChats.reduce((acc: Chat[], chat: Chat) => {
+                  if (!acc.find((c) => c.id === chat.id)) {
+                    acc.push(chat);
+                  }
+                  return acc;
+                }, []);
+                state.chats = uniqueChats;
+                state.hasMoreChats = action.payload.hasMore;
+                if (action.payload.page) {
+                  state.currentPage = action.payload.page;
+                }
+              }
+            })
+      .addCase(loadMoreChats.rejected, (state) => {
+        state.isLoadingMoreChats = false;
       });
   },
 });
@@ -390,6 +511,9 @@ export const selectSelectedChatId = (state: { chat: ChatState }) => state.chat.s
 export const selectMessages = (state: { chat: ChatState }) => state.chat.messages;
 export const selectSearchQuery = (state: { chat: ChatState }) => state.chat.searchQuery;
 export const selectIsLoadingChats = (state: { chat: ChatState }) => state.chat.isLoadingChats;
+export const selectIsLoadingMoreChats = (state: { chat: ChatState }) => state.chat.isLoadingMoreChats;
+export const selectHasMoreChats = (state: { chat: ChatState }) => state.chat.hasMoreChats;
+export const selectCurrentPage = (state: { chat: ChatState }) => state.chat.currentPage;
 
 export const selectSelectedChat = (state: { chat: ChatState }): Chat | null => {
   const selectedId = state.chat.selectedChatId;
