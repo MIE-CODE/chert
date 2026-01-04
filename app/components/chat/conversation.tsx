@@ -180,14 +180,14 @@ export function Conversation({
       <MessageInput 
         onSend={sendMessage}
         onSendAudio={async (audioBlob, duration) => {
+          // Create a temporary message to show in UI
+          const tempMessage = MessageService.createMessage(
+            `🎤 Voice message (${Math.round(duration)}s)`,
+            currentUserId,
+            "Me"
+          );
+          
           try {
-            // Create a temporary message to show in UI
-            const tempMessage = MessageService.createMessage(
-              `🎤 Voice message (${Math.round(duration)}s)`,
-              currentUserId,
-              "Me"
-            );
-            
             // Add to local state
             setLocalMessages((prev) => [...prev, tempMessage]);
             addMessageToStore(chatId, tempMessage, true);
