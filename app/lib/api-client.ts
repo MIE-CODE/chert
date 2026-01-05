@@ -65,6 +65,19 @@ class ApiClient {
 
         // Handle network errors
         if (!error.response && error.request) {
+          // Check error code for more specific error handling
+          const errorCode = (error as any).code;
+          const isNetworkError = errorCode === 'ERR_NETWORK' || errorCode === 'ECONNABORTED' || 
+                                 errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED';
+          
+          if (isNetworkError) {
+            const networkError = new Error("Network error. Please check your connection and try again.");
+            (networkError as any).isNetworkError = true;
+            // Don't log to console - errors will be handled by components with toast notifications
+            return Promise.reject(networkError);
+          }
+          
+          // For other request errors without response, still create network error
           const networkError = new Error("Network error. Please check your connection and try again.");
           (networkError as any).isNetworkError = true;
           return Promise.reject(networkError);
