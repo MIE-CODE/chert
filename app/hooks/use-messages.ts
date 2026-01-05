@@ -16,7 +16,7 @@ interface UseMessagesOptions {
 }
 
 export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
-  const { getChatMessages, addMessage: addMessageToStore } = useChatStore();
+  const { getChatMessages, addMessage: addMessageToStore, markAsRead: markAsReadStore } = useChatStore();
   const { currentUser } = useUserStore();
   const toast = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -129,6 +129,7 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     loadMessages();
   }, [chatId]); // Only depend on chatId - use refs to access stable functions
 
+
   // Join chat room via WebSocket and listen for messages
   useEffect(() => {
     if (!chatId) return;
@@ -217,8 +218,31 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
       }
     };
 
+    // Listen for messages_read events (when other users read messages)
+    const handleMessagesRead = (data: { chatId: string; userId: string; username: string; messageIds?: string[] }) => {
+      if (data.chatId === chatId) {
+        console.log("📖 Messages read event received:", data);
+        // Update read status for messages
+        if (data.messageIds && data.messageIds.length > 0) {
+          setLocalMessages((prev) =>
+            prev.map((msg) =>
+              data.messageIds!.includes(msg.id) ? { ...msg, isRead: true } : msg
+            )
+          );
+          // Also update in store
+          markAsReadStore(chatId, data.messageIds || []);
+        } else {
+          // If no messageIds, mark all messages in chat as read
+          setLocalMessages((prev) =>
+            prev.map((msg) => ({ ...msg, isRead: true }))
+          );
+        }
+      }
+    };
+
     // Set up message listener first (before checking connection)
     websocketService.on("new_message", handleNewMessage);
+    websocketService.on("messages_read", handleMessagesRead);
     
     // Set up connection listener to join chat when connected
     const handleConnect = () => {
@@ -238,12 +262,56 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
     return () => {
       console.log("Cleaning up WebSocket listeners for chat:", chatId);
       websocketService.off("new_message", handleNewMessage);
+      websocketService.off("messages_read", handleMessagesRead);
       websocketService.off("connect", handleConnect);
       if (websocketService.connected) {
         websocketService.leaveChat(chatId);
       }
     };
   }, [chatId, addMessageToStore, effectiveUserId]);
+  
+  // Mark messages as read when chat is opened and messages are loaded
+  useEffect(() => {
+    if (!chatId || !effectiveUserId || localMessages.length === 0) return;
+    
+    // Mark all unread messages as read when chat is opened
+    const markMessagesAsRead = async () => {
+      const unreadMessages = localMessages.filter(
+        (msg) => !msg.isRead && msg.senderId !== effectiveUserId
+      );
+      
+      if (unreadMessages.length > 0) {
+        try {
+          const { messagesAPI, websocketService } = await import("@/app/services/api");
+          const unreadMessageIds = unreadMessages.map((msg) => msg.id);
+          
+          // Mark as read via API
+          await messagesAPI.markAsRead(chatId, unreadMessageIds);
+          
+          // Also emit via WebSocket for real-time updates
+          if (websocketService.connected) {
+            websocketService.markAsRead(chatId, unreadMessageIds);
+          }
+          
+          // Update local state immediately
+          setLocalMessages((prev) =>
+            prev.map((msg) =>
+              unreadMessageIds.includes(msg.id) ? { ...msg, isRead: true } : msg
+            )
+          );
+          
+          // Update store
+          markAsReadStore(chatId, unreadMessageIds);
+        } catch (error) {
+          console.warn("Failed to mark messages as read:", error);
+        }
+      }
+    };
+    
+    // Mark as read after a short delay to ensure messages are loaded
+    const timeoutId = setTimeout(markMessagesAsRead, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [chatId, effectiveUserId, localMessages.length, markAsReadStore]); // Only depend on length to avoid infinite loops
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {

@@ -167,6 +167,7 @@ export function useChatStore() {
   const currentPage = useAppSelector(selectCurrentPage);
   const selectedChat = useAppSelector(selectSelectedChat);
   const unreadCount = useAppSelector(selectUnreadCount);
+  const currentUser = useAppSelector(selectCurrentUser);
   
   const getChatMessages = useCallback((chatId: string) => {
     return messages[chatId] || [];
@@ -183,20 +184,51 @@ export function useChatStore() {
   const handleSelectChat = useCallback(async (chatId: string | null) => {
     dispatch(selectChat(chatId));
     if (chatId) {
-      // Mark as read via API (only if authenticated)
+      // Mark all messages in this chat as read
       const token = typeof window !== "undefined" 
         ? localStorage.getItem("auth_token") 
         : null;
       if (token) {
         try {
-          const { messagesAPI } = await import("@/app/services/api");
-          await messagesAPI.markAsRead(chatId);
+          const { messagesAPI, websocketService } = await import("@/app/services/api");
+          const chatMessages = messages[chatId] || [];
+          
+          // Get all unread message IDs (messages not from current user that aren't read)
+          const unreadMessageIds = chatMessages
+            .filter((msg) => !msg.isRead && msg.senderId !== currentUser?.id)
+            .map((msg) => msg.id);
+          
+          if (unreadMessageIds.length > 0) {
+            // Mark as read via API
+            await messagesAPI.markAsRead(chatId, unreadMessageIds);
+            
+            // Also emit via WebSocket for real-time updates
+            if (websocketService.connected) {
+              websocketService.markAsRead(chatId, unreadMessageIds);
+            }
+            
+            // Update local state immediately
+            dispatch(markAsRead({ chatId, messageIds: unreadMessageIds }));
+          } else {
+            // Even if no unread messages, still call API to mark all as read (for backend sync)
+            await messagesAPI.markAsRead(chatId);
+            if (websocketService.connected) {
+              websocketService.markAsRead(chatId);
+            }
+          }
+          
+          // Reset unread count for this chat
+          const chat = chats.find((c) => c.id === chatId);
+          if (chat && chat.unreadCount > 0) {
+            dispatch(updateChat({ chatId, updates: { unreadCount: 0 } }));
+          }
         } catch (error) {
           // Silently fail - this is a non-critical operation
+          console.warn("Failed to mark messages as read:", error);
         }
       }
     }
-  }, [dispatch]);
+  }, [dispatch, messages, chats, currentUser?.id]);
 
   return {
     chats,

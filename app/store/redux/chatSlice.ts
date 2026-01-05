@@ -407,10 +407,17 @@ const chatSlice = createSlice({
       const messages = state.messages[chatId];
       if (messages) {
         messages.forEach((msg) => {
-          if (messageIds.includes(msg.id)) {
+          if (messageIds.length === 0 || messageIds.includes(msg.id)) {
+            // If messageIds is empty, mark all messages as read
             msg.isRead = true;
           }
         });
+        
+        // Also reset unread count for this chat
+        const chat = state.chats.find((c) => c.id === chatId);
+        if (chat) {
+          chat.unreadCount = 0;
+        }
       }
     },
     setTyping: (state, action: PayloadAction<{ chatId: string; isTyping: boolean }>) => {
