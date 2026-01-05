@@ -76,13 +76,13 @@ export function useWebSocket() {
     };
 
     const handleConnectError = (error: { message: string }) => {
-      console.error("❌ WebSocket connection error:", error.message);
-      // Errors are now handled by the error callback registered above
+      // Don't log to console - errors are handled by the error callback registered above
+      // This handler is kept for Socket.IO event registration but errors are handled via toast
     };
 
     const handleError = (error: { message: string }) => {
-      console.error("WebSocket error:", error.message);
-      // Errors are now handled by the error callback registered above
+      // Don't log to console - errors are handled by the error callback registered above
+      // This handler is kept for Socket.IO event registration but errors are handled via toast
     };
 
     // Global listener for new_message events to update unread counts

@@ -124,9 +124,8 @@ class WebSocketService {
 
     this.socket.on("disconnect", (reason: string) => {
       this.isConnected = false;
-      console.log("WebSocket disconnected:", reason);
+      // Don't log to console - only show toast for unexpected disconnections
       // Will automatically reconnect if reconnection is enabled
-      // Only show toast for unexpected disconnections (not manual disconnects)
       if (reason !== "io client disconnect" && reason !== "io server disconnect") {
         this.emitError({
           message: "Connection lost. Reconnecting...",
@@ -136,7 +135,7 @@ class WebSocketService {
     });
 
     this.socket.on("connect_error", (error: { message: string }) => {
-      console.error("❌ WebSocket connection error:", error.message);
+      // Don't log to console - errors will be handled by toast notifications
       this.isConnected = false;
       
       // Determine error type and message
@@ -159,7 +158,7 @@ class WebSocketService {
     });
 
     this.socket.on("error", (error: { message: string }) => {
-      console.error("WebSocket error:", error);
+      // Don't log to console - errors will be handled by toast notifications
       this.emitError({
         message: error.message || "WebSocket error occurred",
         type: "websocket_error"
