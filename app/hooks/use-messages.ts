@@ -323,8 +323,6 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
         }
 
         // Only update if we got a message from REST API (fallback case)
-        if (message) {
-        // Only update if we got a message from REST API (fallback case)
         // WebSocket messages are handled by the 'new_message' event listener
         if (message) {
           const normalizedMessage = MessageService.normalizeMessage(message);
@@ -352,16 +350,26 @@ export function useMessages({ chatId, currentUserId }: UseMessagesOptions) {
           });
           
           // Update store with server message
-          addMessageToStore(chatId, normalizedMessage);
+          addMessageToStore(chatId, normalizedMessage, true);
         }
-        }
-      } catch (error) {
+      } catch (error: any) {
         // Remove temp message on error
         setLocalMessages((prev) =>
           prev.filter((msg) => msg.id !== tempMessage.id)
         );
-        const errorMessage = error instanceof Error ? error.message : "Failed to send message";
-        toast.error(errorMessage);
+        
+        console.error("Failed to send message:", error);
+        const errorMessage = error?.message || error?.response?.data?.message || "Failed to send message";
+        const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+        const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+        
+        if (isTimeout) {
+          toast.warning("Request timeout. Please check your connection and try again.");
+        } else if (isNetworkError) {
+          toast.warning("Network error. Please check your connection and try again.");
+        } else {
+          toast.error(errorMessage);
+        }
       }
     },
     [chatId, effectiveUserId, addMessageToStore]

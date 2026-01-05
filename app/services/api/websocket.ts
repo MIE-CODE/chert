@@ -55,6 +55,34 @@ export interface SocketEvents {
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private errorCallbacks: Array<(error: { message: string; type: string }) => void> = [];
+
+  /**
+   * Register an error callback for toast notifications
+   */
+  onError(callback: (error: { message: string; type: string }) => void): void {
+    this.errorCallbacks.push(callback);
+  }
+
+  /**
+   * Unregister an error callback
+   */
+  offError(callback: (error: { message: string; type: string }) => void): void {
+    this.errorCallbacks = this.errorCallbacks.filter(cb => cb !== callback);
+  }
+
+  /**
+   * Emit error to all registered callbacks
+   */
+  private emitError(error: { message: string; type: string }): void {
+    this.errorCallbacks.forEach(callback => {
+      try {
+        callback(error);
+      } catch (err) {
+        console.error("Error in WebSocket error callback:", err);
+      }
+    });
+  }
 
   /**
    * Connect to WebSocket server
@@ -98,18 +126,44 @@ class WebSocketService {
       this.isConnected = false;
       console.log("WebSocket disconnected:", reason);
       // Will automatically reconnect if reconnection is enabled
+      // Only show toast for unexpected disconnections (not manual disconnects)
+      if (reason !== "io client disconnect" && reason !== "io server disconnect") {
+        this.emitError({
+          message: "Connection lost. Reconnecting...",
+          type: "disconnect"
+        });
+      }
     });
 
     this.socket.on("connect_error", (error: { message: string }) => {
       console.error("❌ WebSocket connection error:", error.message);
-      // Common errors:
-      // - "Authentication error: No token provided" - Token missing
-      // - "Authentication error: Invalid token" - Token expired or invalid
       this.isConnected = false;
+      
+      // Determine error type and message
+      let errorMessage = "Connection failed. Please check your internet connection.";
+      let errorType = "connection_error";
+      
+      if (error.message.includes("timeout")) {
+        errorMessage = "Connection timeout. Please check your internet connection.";
+        errorType = "timeout";
+      } else if (error.message.includes("Authentication") || error.message.includes("token")) {
+        errorMessage = "Authentication failed. Please log in again.";
+        errorType = "authentication_error";
+      } else if (error.message.includes("Network")) {
+        errorMessage = "Network error. Please check your connection.";
+        errorType = "network_error";
+      }
+      
+      // Emit error to registered callbacks (for toast notifications)
+      this.emitError({ message: errorMessage, type: errorType });
     });
 
     this.socket.on("error", (error: { message: string }) => {
       console.error("WebSocket error:", error);
+      this.emitError({
+        message: error.message || "WebSocket error occurred",
+        type: "websocket_error"
+      });
     });
   }
 

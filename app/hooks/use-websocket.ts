@@ -7,9 +7,11 @@ import { useEffect, useCallback } from "react";
 import { websocketService } from "@/app/services/api";
 import { useUserStore } from "@/app/store";
 import { apiClient } from "@/app/lib/api-client";
+import { useToast } from "@/app/components/ui/toast";
 
 export function useWebSocket() {
   const { currentUser } = useUserStore();
+  const toast = useToast();
 
   // Connect WebSocket when we have a token (don't wait for currentUser to be loaded)
   useEffect(() => {
@@ -32,6 +34,36 @@ export function useWebSocket() {
     };
   }, [currentUser]);
 
+  // Register error handler for toast notifications
+  useEffect(() => {
+    const handleWebSocketError = (error: { message: string; type: string }) => {
+      try {
+        // Don't show toast for authentication errors during initial connection
+        // (they're handled by auth flow)
+        if (error.type === "authentication_error" && !currentUser) {
+          return;
+        }
+
+        // Show appropriate toast based on error type
+        if (error.type === "timeout" || error.type === "network_error" || error.type === "connection_error") {
+          toast.warning(error.message);
+        } else if (error.type === "authentication_error") {
+          toast.error(error.message);
+        } else {
+          toast.error(error.message);
+        }
+      } catch (err) {
+        console.error("Error showing WebSocket error toast:", err);
+      }
+    };
+
+    websocketService.onError(handleWebSocketError);
+
+    return () => {
+      websocketService.offError(handleWebSocketError);
+    };
+  }, [toast, currentUser]);
+
   // Handle connection events and global message listener for testing
   useEffect(() => {
     const handleConnect = () => {
@@ -45,15 +77,12 @@ export function useWebSocket() {
 
     const handleConnectError = (error: { message: string }) => {
       console.error("❌ WebSocket connection error:", error.message);
-      // Handle authentication errors
-      if (error.message.includes("Authentication")) {
-        // Token expired or invalid - could redirect to login or refresh token
-        console.warn("Authentication error - token may be expired or invalid");
-      }
+      // Errors are now handled by the error callback registered above
     };
 
     const handleError = (error: { message: string }) => {
       console.error("WebSocket error:", error.message);
+      // Errors are now handled by the error callback registered above
     };
 
     // Global listener for new_message events to update unread counts

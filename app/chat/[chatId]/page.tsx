@@ -49,10 +49,24 @@ export default function ChatPage() {
           // Select it
           selectChat(chatId);
         })
-        .catch((error) => {
+        .catch((error: any) => {
           console.error("Failed to load chat by ID:", error);
-          toast.error("Failed to load chat. Redirecting...");
-          router.replace("/");
+          const errorMessage = error?.message || error?.response?.data?.message || "Failed to load chat";
+          const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+          const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+          
+          if (isTimeout) {
+            toast.warning("Request timeout. Please check your connection.");
+          } else if (isNetworkError) {
+            toast.warning("Network error. Please check your connection.");
+          } else {
+            toast.error(errorMessage);
+          }
+          
+          // Redirect to home after a short delay
+          setTimeout(() => {
+            router.replace("/");
+          }, 2000);
         })
         .finally(() => {
           setIsLoadingChat(false);

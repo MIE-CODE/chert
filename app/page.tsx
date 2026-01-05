@@ -97,11 +97,25 @@ function HomeContent() {
         
         addChat(normalizedChat);
         toast.info(`New chat started with ${data.sender.username}`);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch new chat:", error);
+        const errorMessage = error?.message || error?.response?.data?.message || "Failed to load new chat";
+        const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+        const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+        
+        if (isTimeout) {
+          toast.warning("Request timeout. Please check your connection.");
+        } else if (isNetworkError) {
+          toast.warning("Network error. Please check your connection.");
+        } else {
+          toast.error(errorMessage);
+        }
+        
         // Fallback: reload all chats
-        loadChats().catch((err) => {
+        loadChats().catch((err: any) => {
           console.error("Failed to reload chats after new chat notification:", err);
+          const fallbackError = err?.message || "Failed to reload chats";
+          toast.error(fallbackError);
         });
       }
     };

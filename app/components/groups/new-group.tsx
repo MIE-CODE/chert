@@ -192,14 +192,20 @@ export function NewGroup({ onBack, onCreateGroup }: NewGroupProps) {
                 });
                 toast.success("Group created successfully!");
                 onBack?.();
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : "Failed to create group";
-                toast.error(errorMessage);
-                // Still call onCreateGroup for UI update even if API fails
-                onCreateGroup?.({
-                  name: groupName,
-                  members: selectedMembers,
-                });
+              } catch (error: any) {
+                console.error("Failed to create group:", error);
+                const errorMessage = error?.message || error?.response?.data?.message || "Failed to create group";
+                const isTimeout = error?.isTimeout || error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+                const isNetworkError = error?.isNetworkError || error?.code === 'ERR_NETWORK';
+                
+                if (isTimeout) {
+                  toast.warning("Request timeout. Please check your connection and try again.");
+                } else if (isNetworkError) {
+                  toast.warning("Network error. Please check your connection and try again.");
+                } else {
+                  toast.error(errorMessage);
+                }
+                // Don't call onCreateGroup on error - let user retry
               }
             }
           }}

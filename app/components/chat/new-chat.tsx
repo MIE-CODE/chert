@@ -143,10 +143,22 @@ export function NewChat({ onBack, onChatCreated }: NewChatProps) {
       
       // Close the modal
       onBack?.();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to start chat";
-      setError(errorMessage);
-      toast.error(errorMessage);
+    } catch (err: any) {
+      console.error("Failed to start chat:", err);
+      const errorMessage = err?.message || err?.response?.data?.message || "Failed to start chat";
+      const isTimeout = err?.isTimeout || err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      const isNetworkError = err?.isNetworkError || err?.code === 'ERR_NETWORK';
+      
+      if (isTimeout) {
+        toast.warning("Request timeout. Please check your connection and try again.");
+        setError("Connection timeout. Please try again.");
+      } else if (isNetworkError) {
+        toast.warning("Network error. Please check your connection and try again.");
+        setError("Network error. Please check your connection.");
+      } else {
+        toast.error(errorMessage);
+        setError(errorMessage);
+      }
     } finally {
       setIsCreating(false);
     }
